@@ -1,6 +1,7 @@
 // Agent session state machine
 use super::events::{AgentEvent, EventBus};
-use super::messages::{Message, MessageRole, MessageContent, SessionEntry};
+use super::hooks::{HookContext, HookEvent, HookRegistry};
+use super::messages::{Message, MessageContent, SessionEntry};
 use super::persistence::SessionManager;
 use crate::tools::ToolRegistry;
 use anyhow::{Context, Result};
@@ -25,6 +26,12 @@ pub struct AgentSession {
 
     /// Tool registry
     tool_registry: Arc<ToolRegistry>,
+
+    /// Hook registry for extensibility
+    hook_registry: Arc<HookRegistry>,
+
+    /// Current working directory (for hook context)
+    cwd: String,
 }
 
 impl AgentSession {
@@ -33,7 +40,13 @@ impl AgentSession {
         id: String,
         session_manager: Arc<SessionManager>,
         tool_registry: Arc<ToolRegistry>,
+        hook_registry: Arc<HookRegistry>,
     ) -> Self {
+        let cwd = std::env::current_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+            .to_string_lossy()
+            .to_string();
+
         Self {
             id,
             entries: Vec::new(),
@@ -41,6 +54,8 @@ impl AgentSession {
             event_bus: EventBus::default(),
             session_manager,
             tool_registry,
+            hook_registry,
+            cwd,
         }
     }
 
@@ -49,11 +64,17 @@ impl AgentSession {
         id: String,
         session_manager: Arc<SessionManager>,
         tool_registry: Arc<ToolRegistry>,
+        hook_registry: Arc<HookRegistry>,
     ) -> Result<Self> {
         let entries = session_manager.load_session(&id).await?;
 
         // Find the last entry as the current head
         let current_head = entries.last().map(|e| e.id().to_string());
+
+        let cwd = std::env::current_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+            .to_string_lossy()
+            .to_string();
 
         Ok(Self {
             id,
@@ -62,6 +83,8 @@ impl AgentSession {
             event_bus: EventBus::default(),
             session_manager,
             tool_registry,
+            hook_registry,
+            cwd,
         })
     }
 
@@ -96,9 +119,30 @@ impl AgentSession {
             role: "user".to_string(),
         })?;
 
+        // Emit hook event
+        let hook_context = HookContext {
+            cwd: self.cwd.clone(),
+            session_id: self.id.clone(),
+        };
+        self.hook_registry.emit(
+            HookEvent::MessageStart {
+                message_id: message_id.clone(),
+                role: "user".to_string(),
+            },
+            &hook_context,
+        ).await?;
+
         self.event_bus.emit(AgentEvent::MessageEnd {
             message_id: message_id.clone(),
         })?;
+
+        // Emit hook event for message end
+        self.hook_registry.emit(
+            HookEvent::MessageEnd {
+                message_id: message_id.clone(),
+            },
+            &hook_context,
+        ).await?;
 
         Ok(message_id)
     }
@@ -129,9 +173,30 @@ impl AgentSession {
             role: "assistant".to_string(),
         })?;
 
+        // Emit hook event
+        let hook_context = HookContext {
+            cwd: self.cwd.clone(),
+            session_id: self.id.clone(),
+        };
+        self.hook_registry.emit(
+            HookEvent::MessageStart {
+                message_id: message_id.clone(),
+                role: "assistant".to_string(),
+            },
+            &hook_context,
+        ).await?;
+
         self.event_bus.emit(AgentEvent::MessageEnd {
             message_id: message_id.clone(),
         })?;
+
+        // Emit hook event for message end
+        self.hook_registry.emit(
+            HookEvent::MessageEnd {
+                message_id: message_id.clone(),
+            },
+            &hook_context,
+        ).await?;
 
         Ok(message_id)
     }
@@ -168,6 +233,8 @@ impl AgentSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::hooks::HookRegistry;
+    use super::super::messages::MessageRole;
     use tempfile::TempDir;
 
     #[tokio::test]
@@ -175,10 +242,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let session_manager = Arc::new(SessionManager::new(temp_dir.path().to_path_buf()));
         let tool_registry = Arc::new(ToolRegistry::new());
+        let hook_registry = Arc::new(HookRegistry::new());
 
         session_manager.create_session("test").await.unwrap();
 
-        let session = AgentSession::new("test".to_string(), session_manager, tool_registry);
+        let session = AgentSession::new("test".to_string(), session_manager, tool_registry, hook_registry);
 
         assert_eq!(session.session_id(), "test");
         assert_eq!(session.entry_count(), 0);
@@ -189,10 +257,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let session_manager = Arc::new(SessionManager::new(temp_dir.path().to_path_buf()));
         let tool_registry = Arc::new(ToolRegistry::new());
+        let hook_registry = Arc::new(HookRegistry::new());
 
         session_manager.create_session("test").await.unwrap();
 
-        let mut session = AgentSession::new("test".to_string(), session_manager.clone(), tool_registry);
+        let mut session = AgentSession::new("test".to_string(), session_manager.clone(), tool_registry, hook_registry);
 
         let msg_id = session.add_user_message("Hello!".to_string()).await.unwrap();
 
@@ -209,16 +278,17 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let session_manager = Arc::new(SessionManager::new(temp_dir.path().to_path_buf()));
         let tool_registry = Arc::new(ToolRegistry::new());
+        let hook_registry = Arc::new(HookRegistry::new());
 
         session_manager.create_session("test").await.unwrap();
 
         // Add some messages
-        let mut session1 = AgentSession::new("test".to_string(), session_manager.clone(), tool_registry.clone());
+        let mut session1 = AgentSession::new("test".to_string(), session_manager.clone(), tool_registry.clone(), hook_registry.clone());
         session1.add_user_message("Message 1".to_string()).await.unwrap();
         session1.add_assistant_message(MessageContent::Text("Response 1".to_string())).await.unwrap();
 
         // Load in a new session instance
-        let session2 = AgentSession::load("test".to_string(), session_manager, tool_registry).await.unwrap();
+        let session2 = AgentSession::load("test".to_string(), session_manager, tool_registry, hook_registry).await.unwrap();
 
         assert_eq!(session2.entry_count(), 2);
         let messages = session2.get_messages();
@@ -230,10 +300,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let session_manager = Arc::new(SessionManager::new(temp_dir.path().to_path_buf()));
         let tool_registry = Arc::new(ToolRegistry::new());
+        let hook_registry = Arc::new(HookRegistry::new());
 
         session_manager.create_session("test").await.unwrap();
 
-        let mut session = AgentSession::new("test".to_string(), session_manager, tool_registry);
+        let mut session = AgentSession::new("test".to_string(), session_manager, tool_registry, hook_registry);
 
         session.add_user_message("Hello".to_string()).await.unwrap();
         session.add_assistant_message(MessageContent::Text("Hi!".to_string())).await.unwrap();

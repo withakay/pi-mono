@@ -13,6 +13,7 @@ pub use core::{
     session::AgentSession,
     messages::{Message, MessageRole, MessageContent},
     events::{AgentEvent, EventBus},
+    hooks::{Hook, HookRegistry, HookEvent, HookContext, LoggingHook},
     settings::Settings,
     persistence::SessionManager,
 };

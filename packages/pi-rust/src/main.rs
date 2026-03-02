@@ -3,6 +3,7 @@ use pi_coding_agent::{
         persistence::SessionManager,
         session::AgentSession,
         messages::MessageContent,
+        hooks::HookRegistry,
     },
     tools::ToolRegistry,
     cli::args::{Cli, Commands},
@@ -28,6 +29,7 @@ async fn main() -> Result<()> {
 
     let session_manager = Arc::new(SessionManager::new(session_dir));
     let tool_registry = Arc::new(ToolRegistry::with_builtins());
+    let hook_registry = Arc::new(HookRegistry::new());
 
     match cli.command {
         Some(Commands::Sessions) => {
@@ -60,6 +62,7 @@ async fn main() -> Result<()> {
                 id.clone(),
                 session_manager.clone(),
                 tool_registry.clone(),
+                hook_registry.clone(),
             ).await?;
 
             let messages = session.get_messages();
@@ -87,6 +90,7 @@ async fn main() -> Result<()> {
                 session_id.clone(),
                 session_manager.clone(),
                 tool_registry.clone(),
+                hook_registry.clone(),
             ).await {
                 Ok(s) => {
                     println!("Loaded existing session: {}", session_id);
@@ -95,7 +99,7 @@ async fn main() -> Result<()> {
                 Err(_) => {
                     println!("Creating new session: {}", session_id);
                     session_manager.create_session(&session_id).await?;
-                    AgentSession::new(session_id, session_manager, tool_registry)
+                    AgentSession::new(session_id, session_manager, tool_registry, hook_registry)
                 }
             };
 
