@@ -11,9 +11,10 @@ pub mod utils;
 // Re-export key types for convenience
 pub use core::{
     session::AgentSession,
-    messages::{Message, MessageRole},
+    messages::{Message, MessageRole, MessageContent},
     events::{AgentEvent, EventBus},
     settings::Settings,
+    persistence::SessionManager,
 };
 
 pub use tools::{Tool, ToolRegistry};
