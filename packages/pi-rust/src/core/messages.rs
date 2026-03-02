@@ -68,7 +68,6 @@ pub struct Message {
     pub role: MessageRole,
 
     /// Message content (can be string or array of content blocks)
-    #[serde(flatten)]
     pub content: MessageContent,
 
     /// Timestamp
