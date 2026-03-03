@@ -37,3 +37,21 @@ impl Tool for ExecutorTool {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_executor_tool() {
+        let tool = ExecutorTool::new();
+        assert_eq!(tool.name(), "executor");
+        assert!(!tool.description().is_empty());
+        let schema = tool.input_schema();
+        assert_eq!(schema["type"], "object");
+
+        let result = tool.execute(serde_json::json!({})).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("Not implemented"));
+    }
+}

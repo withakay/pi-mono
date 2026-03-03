@@ -209,4 +209,92 @@ mod tests {
         assert!(result.output.contains("11")); // File size
         assert!(result.output.contains("test.txt"));
     }
+
+    #[tokio::test]
+    async fn test_ls_trait_methods() {
+        let tool = LsTool::new();
+        assert_eq!(tool.name(), "ls");
+        assert!(!tool.description().is_empty());
+        let schema = tool.input_schema();
+        assert_eq!(schema["type"], "object");
+    }
+
+    #[tokio::test]
+    async fn test_ls_empty_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let tool = LsTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({});
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("empty directory"));
+    }
+
+    #[tokio::test]
+    async fn test_ls_nonexistent_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let tool = LsTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({"path": "nonexistent"});
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("does not exist"));
+    }
+
+    #[tokio::test]
+    async fn test_ls_file_path() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(temp_dir.path().join("single.txt"), "content").await.unwrap();
+
+        let tool = LsTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({"path": "single.txt"});
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("single.txt"));
+    }
+
+    #[tokio::test]
+    async fn test_ls_file_long_format() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(temp_dir.path().join("single.txt"), "content").await.unwrap();
+
+        let tool = LsTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({"path": "single.txt", "long": true});
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("single.txt"));
+        assert!(result.output.contains("7")); // "content" is 7 bytes
+    }
+
+    #[tokio::test]
+    async fn test_ls_with_subdirectory_long() {
+        let temp_dir = TempDir::new().unwrap();
+        let subdir = temp_dir.path().join("subdir");
+        fs::create_dir(&subdir).await.unwrap();
+        fs::write(temp_dir.path().join("file.txt"), "data").await.unwrap();
+
+        let tool = LsTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({"long": true});
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("d")); // directory type marker
+        assert!(result.output.contains("subdir"));
+        assert!(result.output.contains("file.txt"));
+    }
+
+    #[tokio::test]
+    async fn test_ls_absolute_path() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(temp_dir.path().join("abs.txt"), "text").await.unwrap();
+
+        let tool = LsTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({"path": temp_dir.path().to_str().unwrap()});
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("abs.txt"));
+    }
 }

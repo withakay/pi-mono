@@ -167,4 +167,40 @@ mod tests {
         let content = tokio::fs::read_to_string(&file_path).await.unwrap();
         assert_eq!(content, "New content");
     }
+
+    #[tokio::test]
+    async fn test_write_trait_methods() {
+        let tool = WriteTool::new();
+        assert_eq!(tool.name(), "write");
+        assert!(!tool.description().is_empty());
+        let schema = tool.input_schema();
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"]["path"].is_object());
+    }
+
+    #[tokio::test]
+    async fn test_write_missing_params() {
+        let tool = WriteTool::new();
+        let input = serde_json::json!({});
+        let result = tool.execute(input).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_write_absolute_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("abs_write.txt");
+
+        let tool = WriteTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "path": file_path.to_str().unwrap(),
+            "content": "absolute write"
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+
+        let content = tokio::fs::read_to_string(&file_path).await.unwrap();
+        assert_eq!(content, "absolute write");
+    }
 }

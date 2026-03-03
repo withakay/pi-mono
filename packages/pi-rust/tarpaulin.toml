@@ -1,0 +1,11 @@
+[default]
+# Exclude main.rs (CLI entry point - not unit-testable)
+exclude-files = ["src/main.rs"]
+# Run tests with color output
+color = "Auto"
+# Output formats
+out = ["Stdout"]
+# Skip clean build for faster runs
+skip-clean = true
+# Fail under 90% coverage
+fail-under = 90
