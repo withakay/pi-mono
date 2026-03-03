@@ -516,7 +516,7 @@ mod tests {
     #[test]
     fn test_edit_generate_diff_multiple_groups() {
         // Create content with changes far apart to trigger multiple diff groups
-        let mut old_lines: Vec<String> = (1..=50).map(|i| format!("line{}", i)).collect();
+        let old_lines: Vec<String> = (1..=50).map(|i| format!("line{}", i)).collect();
         let old = old_lines.join("\n");
 
         let mut new_lines = old_lines.clone();
@@ -525,7 +525,7 @@ mod tests {
         let new = new_lines.join("\n");
 
         let (diff, first_line) = EditTool::generate_diff(&old, &new, "test.txt");
-        assert!(diff.contains("..."));  // Separator between groups (line 120)
+        assert!(diff.contains("...")); // Separator between non-adjacent diff groups
         assert!(first_line.is_some());
     }
 
@@ -534,7 +534,7 @@ mod tests {
         let old = "line1\nline2";
         let new = "line1\nmodified";
         let (diff, _) = EditTool::generate_diff(old, new, "test.txt");
-        // Lines without trailing newline should still be handled (line 139)
+        // Lines without trailing newline should still produce valid diff output
         assert!(diff.contains("modified"));
     }
 }

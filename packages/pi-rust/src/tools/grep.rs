@@ -449,9 +449,11 @@ mod tests {
     async fn test_grep_invalid_input() {
         let tool = GrepTool::new();
         let input = serde_json::json!({});
-        let result = tool.execute(input).await;
-        // Invalid input should return an error via ToolResult
-        assert!(result.is_err() || !result.unwrap().success);
+        // Invalid input (missing required "pattern" field) should fail
+        match tool.execute(input).await {
+            Err(_) => {} // Expected: deserialization error
+            Ok(result) => assert!(!result.success, "Should not succeed with missing pattern"),
+        }
     }
 
     #[tokio::test]
