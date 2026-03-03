@@ -80,8 +80,8 @@ Built working command-line interface:
 ## Current Project State
 
 ### Lines of Code
-- ~3,400 lines across 50+ files
-- All code compiles without errors
+- ~2,862 lines across 50+ files
+- All code compiles without errors (with 9 warnings)
 - Comprehensive documentation and tests
 
 ### Key Files Implemented
@@ -96,8 +96,8 @@ Built working command-line interface:
 
 ### Test Results
 ```
-running 27 tests
-test result: ok. 27 passed; 0 failed; 0 ignored
+running 30 tests
+test result: ok. 30 passed; 0 failed; 0 ignored
 
 All tests passing including:
 - 6 core::messages tests
@@ -105,6 +105,7 @@ All tests passing including:
 - 4 core::settings tests
 - 4 core::persistence tests
 - 4 core::session tests
+- 3 core::hooks tests (Hook system implemented!)
 - 3 tools::bash tests
 - 3 tools::read tests
 - 3 tools::write tests
@@ -112,17 +113,20 @@ All tests passing including:
 
 ## Remaining Work
 
-### Phase 6: Additional Tools (Optional)
-Extended tool support:
+### Phase 6: Additional Tools
+Extended tool support (stubs in place, need full implementation):
 - [ ] Edit tool with diff support
 - [ ] Grep tool respecting .gitignore
 - [ ] Find tool with glob patterns
 - [ ] Ls tool with extended attributes
 
-### Phase 7: Hook System
-- [ ] Hook trait definition
-- [ ] Hook registration and lifecycle
-- [ ] Event dispatch to hooks
+### Phase 7: Hook System ✅ (Basic Implementation Complete)
+Core hook system is implemented with tests passing:
+- [x] Hook trait definition
+- [x] Hook registration and lifecycle
+- [x] Event dispatch to hooks
+- [x] Example logging hook
+- [ ] Integration with AgentSession for event emission
 - [ ] (Future: WASM plugin support)
 
 ### Phase 8: Interactive TUI
@@ -139,10 +143,10 @@ Extended tool support:
 - [ ] Response streaming to TUI
 
 ### Phase 10: Additional Features
+- [ ] Compaction logic (token-aware summarization) - file exists but is empty
 - [ ] Print mode (single-shot queries)
 - [ ] RPC mode (JSON stdin/stdout)
 - [ ] Theme system
-- [ ] Compaction logic (token-aware summarization)
 - [ ] Session branching (tree structure navigation)
 - [ ] End-to-end testing
 
@@ -195,10 +199,35 @@ Messages: 2
 
 ## Next Steps
 
-1. **Hook System** - Event-driven extensibility
-2. **Interactive TUI** - Build the ratatui interface
-3. **LLM Integration** - Connect to Anthropic API
-4. **Advanced Tools** - Edit, Grep, Find, Ls
-5. **Polish** - Themes, testing, documentation
+**Immediate priorities (Phases 6-8):**
 
-The core foundation is complete and working end-to-end. Ready to build the interactive interface and LLM integration.
+1. **Complete Additional Tools (Phase 6)** - Essential for agent functionality
+   - Implement Edit tool with diff-based modifications
+   - Implement Grep tool with .gitignore support
+   - Implement Find tool with glob patterns
+   - Implement Ls tool with directory listing
+
+2. **Integrate Hook System (Phase 7)** - Event-driven architecture
+   - Wire hooks into AgentSession lifecycle
+   - Emit hook events for session/message/tool operations
+   - Add configuration for enabling/disabling hooks
+
+3. **Interactive TUI (Phase 8)** - Build the user interface
+   - Create ratatui-based application structure
+   - Implement editor component with @ file references
+   - Add message streaming display
+   - Build footer with status/tokens/cost
+
+4. **LLM Integration (Phase 9)** - Connect to AI services
+   - Anthropic API client with reqwest
+   - SSE stream parsing
+   - Token counting and context management
+   - Response streaming to TUI
+
+5. **Polish (Phase 10)** - Complete the application
+   - Compaction logic for long conversations
+   - Print and RPC modes
+   - Theme system
+   - Session branching
+
+The core foundation is complete and working end-to-end. The CLI demo proves the architecture is sound. Now ready to build essential tools, then the interactive interface and LLM integration.
