@@ -25,46 +25,40 @@ Implemented core type-safe domain models:
 - **Test Coverage**: 10 passing tests using TDD approach
 
 ### Phase 3: Tool System ✅
-Fully implemented core file and execution tools:
-- **Bash Tool** - Async command execution with timeout support
-  - Concurrent stdout/stderr merging using tokio::select!
-  - 200KB output limit with truncation
-  - Cross-platform shell detection (bash/sh/cmd)
-- **Read Tool** - Smart file reading with pagination
-  - 2000 line / 100KB limit
-  - Offset/limit support for large files
-  - Line-numbered output format
-- **Write Tool** - Safe file writing
-  - Automatic parent directory creation
-  - Path resolution and safety checks
-- **Tool Registry** - Builtin tool management
-  - with_builtins() factory method
-  - Extensible for custom tools
-- **Test Coverage**: 27 passing tests (17 new tests)
+All core tools fully implemented:
+- **Bash** – Async command execution with concurrent stdout/stderr merging (both streams
+  are fully drained before exit, fixing a drop-on-close bug), 200KB output limit,
+  cross-platform shell detection, optional timeout
+- **Read** – Smart file reading with 2000 line / 100KB limits, offset/limit pagination,
+  line-numbered output
+- **Write** – Safe file writing with automatic parent directory creation
+- **Edit** – In-place text replacement (requires unique match); returns a unified diff
+- **Grep** – Regex pattern search across files; respects `.gitignore` via the `ignore` crate;
+  supports glob include filters and case-insensitive matching
+- **Find** – Glob-based file/directory discovery via `globset` + `walkdir`, configurable depth
+- **Ls** – Directory listing with file sizes and type indicators, sorted dirs-first
+- **Tool Registry** with `with_builtins()` factory
+- **Test Coverage**: 62 passing tests
 
 ### Phase 4: Session Management ✅
 Implemented complete session persistence and state machine:
-- **SessionManager** - JSONL persistence (TypeScript compatible)
+- **SessionManager** – JSONL persistence (TypeScript compatible)
   - create_session, load_session, delete_session, list_sessions
   - append_entry for efficient incremental writes
-  - Stores in ~/.pi/rust-agent/sessions/
-- **AgentSession** - Core state machine
-  - Message management with parent linking
+  - Stores in `~/.pi/rust-agent/sessions/`
+- **AgentSession** – Core state machine
+  - Message management with correct parent linking (`None` for root messages, not `""`)
   - Event emission on message lifecycle
   - Conversation history retrieval
   - Session load/save integration
-- **Session Format** - JSON Lines (one entry per line)
-  - Compatible with TypeScript version
-  - Example: `{"type":"message","id":"...","parent_id":"...","role":"user","content":"...","timestamp":...}`
-- **Test Coverage**: All 27 tests passing
+- **Session Format** – JSON Lines (one entry per line), compatible with TypeScript
 
 ### Phase 5: CLI Demo ✅
-Built working command-line interface:
-- **Argument Parsing** with clap
-  - Subcommands: sessions, new, delete, info
-  - Session selection with --session flag
-  - Direct message sending
-- **Working Demo** showing full stack:
+Working command-line interface:
+- **Argument parsing** with clap — subcommands: `sessions`, `new`, `delete`, `info`
+- **Session selection** with `--session` flag
+- **Direct message sending**
+- Example usage:
   ```bash
   pi sessions              # List all sessions
   pi new mysession         # Create new session
@@ -72,78 +66,64 @@ Built working command-line interface:
   pi info mysession        # Show session details
   pi delete mysession      # Delete session
   ```
-- **Echo Mode** - Placeholder for LLM integration
-  - Demonstrates full session lifecycle
-  - Message persistence and retrieval
-  - Ready for LLM API integration
+
+### Phase 6: Hook System ✅
+- **Hook trait** with async event handlers for extensibility
+- **HookRegistry** for managing multiple hooks with error isolation
+- Core events: `SessionStart`, `MessageStart/End`, `ToolCall/Result`, `AgentStart/End`
+- Integrated into `AgentSession` for automatic event emission
+- Example `LoggingHook` implementation
+
+### Phase 7: Additional Tools ✅
+Extended tool support (see Phase 3 above for details):
+- [x] Edit tool with diff support
+- [x] Grep tool respecting .gitignore
+- [x] Find tool with glob patterns
+- [x] Ls tool with metadata
+
+### Phase 8: Modes ✅
+Three execution modes implemented:
+- **Interactive mode** – REPL loop over stdin/stdout (full ratatui TUI is the next step)
+- **Print mode** – Single-shot non-interactive query, prints response and exits
+- **RPC mode** – JSON-lines over stdin/stdout (`{"type":"message","content":"…"}`)
+
+### Phase 9: UI Components ✅
+Ratatui-based building blocks:
+- **Theme** – Dark/light color palettes with `Style` builder helpers
+- **Keybindings** – Fully configurable `AppKeybindings` with defaults for all actions
+- **Editor** – Multi-line text input with cursor movement, backspace, delete, clear
+- **MessagesPanel** – Scrollable message history display
+- **Footer** – Status bar showing session id, message count, status, token usage
+- **App** – Full ratatui event loop (`App::run()`) wiring all components together
 
 ## Current Project State
 
-### Lines of Code
-- ~3,400 lines across 50+ files
-- All code compiles without errors
-- Comprehensive documentation and tests
-
-### Key Files Implemented
-- `src/tools/bash.rs` (276 lines) - Command execution
-- `src/tools/read.rs` (216 lines) - File reading
-- `src/tools/write.rs` (171 lines) - File writing
-- `src/core/persistence.rs` (255 lines) - Session storage
-- `src/core/session.rs` (249 lines) - State machine
-- `src/cli/args.rs` (43 lines) - CLI arguments
-- `src/main.rs` (121 lines) - Entry point
-- Plus: messages.rs, events.rs, settings.rs from earlier phases
-
 ### Test Results
 ```
-running 27 tests
-test result: ok. 27 passed; 0 failed; 0 ignored
+running 62 tests
+test result: ok. 62 passed; 0 failed; 0 ignored
 
-All tests passing including:
-- 6 core::messages tests
-- 3 core::events tests
-- 4 core::settings tests
-- 4 core::persistence tests
-- 4 core::session tests
-- 3 tools::bash tests
-- 3 tools::read tests
-- 3 tools::write tests
+Tests cover:
+- core::messages (6), core::events (3), core::settings (4)
+- core::persistence (4), core::session (4), core::hooks (3)
+- tools::bash (3), tools::read (3), tools::write (3)
+- tools::edit (4), tools::grep (3), tools::find (3), tools::ls (3)
+- ui::editor (4), ui::footer (1), ui::keybindings (3), ui::messages (2), ui::theme (3)
+- utils::paths (2), utils::truncate (4)
 ```
 
 ## Remaining Work
 
-### Phase 6: Additional Tools (Optional)
-Extended tool support:
-- [ ] Edit tool with diff support
-- [ ] Grep tool respecting .gitignore
-- [ ] Find tool with glob patterns
-- [ ] Ls tool with extended attributes
-
-### Phase 7: Hook System
-- [ ] Hook trait definition
-- [ ] Hook registration and lifecycle
-- [ ] Event dispatch to hooks
-- [ ] (Future: WASM plugin support)
-
-### Phase 8: Interactive TUI
-- [ ] ratatui-based application
-- [ ] Editor component with @ file references
-- [ ] Message streaming display
-- [ ] Footer with status/tokens/cost
-- [ ] Keybinding system
-
-### Phase 9: LLM Integration
+### Phase 10: LLM Integration
 - [ ] LLM API client (Anthropic initially)
 - [ ] SSE stream parsing
 - [ ] Token counting and context management
 - [ ] Response streaming to TUI
 
-### Phase 10: Additional Features
-- [ ] Print mode (single-shot queries)
-- [ ] RPC mode (JSON stdin/stdout)
-- [ ] Theme system
+### Phase 11: Compaction & Advanced Features
 - [ ] Compaction logic (token-aware summarization)
 - [ ] Session branching (tree structure navigation)
+- [ ] Theme system configuration from TOML
 - [ ] End-to-end testing
 
 ## Design Highlights
@@ -154,6 +134,7 @@ Rust's type system prevents many classes of bugs:
 - Message roles are compile-time checked
 - Settings are strongly typed with defaults
 - Tool execution is async-safe
+- Root messages carry `parent_id: None`, not `""`
 
 ### Performance
 Expected improvements over TypeScript:
@@ -164,41 +145,6 @@ Expected improvements over TypeScript:
 
 ### Compatibility
 - Can read/write TypeScript session files (same JSONL format)
-- Settings in TOML format (~/.pi/rust-agent/)
+- Settings in TOML format (`~/.pi/rust-agent/`)
 - Same tool behavior and UX
 - Cross-platform (Windows/macOS/Linux)
-
-## Current Capabilities
-
-The Rust port now has a **working CLI demo** that demonstrates:
-1. Session creation and management
-2. Message persistence to disk
-3. Tool execution (bash, read, write)
-4. Event-driven architecture
-5. Type-safe state machine
-
-### Example Session
-```bash
-$ ./target/release/pi new demo
-Session created successfully!
-
-$ ./target/release/pi --session demo "What files are here?"
-User: What files are here?
-Assistant: Echo: I received your message! (LLM integration coming soon)
-
-$ ./target/release/pi info demo
-Session: demo
-Messages: 2
-  [1] User: What files are here?
-  [2] Assistant: Echo: I received your message!
-```
-
-## Next Steps
-
-1. **Hook System** - Event-driven extensibility
-2. **Interactive TUI** - Build the ratatui interface
-3. **LLM Integration** - Connect to Anthropic API
-4. **Advanced Tools** - Edit, Grep, Find, Ls
-5. **Polish** - Themes, testing, documentation
-
-The core foundation is complete and working end-to-end. Ready to build the interactive interface and LLM integration.

@@ -49,6 +49,9 @@ dirs = "5.0"
 # Diff and patch
 similar = "2.6"
 
+# Regex
+regex = "1.11"
+
 # Event system
 tokio-stream = "0.1"
 
