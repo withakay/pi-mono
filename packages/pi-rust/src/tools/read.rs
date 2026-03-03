@@ -298,6 +298,7 @@ mod tests {
 
         let result = tool.execute(input).await.unwrap();
         assert!(result.success);
-        assert!(result.output.contains("100KB limit") || result.output.contains("Truncated"));
+        // Output exceeds the 100KB byte limit, so it should be truncated
+        assert!(result.output.contains("100KB limit"));
     }
 }

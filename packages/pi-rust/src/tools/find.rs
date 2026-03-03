@@ -269,7 +269,10 @@ mod tests {
     async fn test_find_invalid_input() {
         let tool = FindTool::new();
         let input = serde_json::json!({});
-        let result = tool.execute(input).await;
-        assert!(result.is_err() || !result.unwrap().success);
+        // Invalid input (missing required "pattern" field) should fail
+        match tool.execute(input).await {
+            Err(_) => {} // Expected: deserialization error
+            Ok(result) => assert!(!result.success, "Should not succeed with missing pattern"),
+        }
     }
 }
