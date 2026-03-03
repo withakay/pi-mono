@@ -77,6 +77,29 @@ Built working command-line interface:
   - Message persistence and retrieval
   - Ready for LLM API integration
 
+### Phase 6: Additional Tools ✅
+Implemented all essential file operation tools:
+- **Edit Tool** - String-based file editing (372 lines)
+  - Fuzzy matching for quotes/whitespace variations
+  - Unified diff generation with context
+  - BOM and line ending preservation
+  - 4 comprehensive tests
+- **Grep Tool** - Pattern search with .gitignore (388 lines)
+  - Regex and literal string matching
+  - Context lines support
+  - Output truncation and match limits
+  - 4 tests covering various search scenarios
+- **Find Tool** - File discovery (210 lines)
+  - Glob pattern matching
+  - File/directory type filtering
+  - .gitignore integration
+  - 3 tests for different use cases
+- **Ls Tool** - Directory listing (213 lines)
+  - Hidden file support (-a flag)
+  - Long format with sizes (-l flag)
+  - Sorted output
+  - 3 tests covering basic, hidden, and long formats
+
 ## Current Project State
 
 ### Lines of Code
@@ -96,8 +119,8 @@ Built working command-line interface:
 
 ### Test Results
 ```
-running 30 tests
-test result: ok. 30 passed; 0 failed; 0 ignored
+running 44 tests
+test result: ok. 44 passed; 0 failed; 0 ignored
 
 All tests passing including:
 - 6 core::messages tests
@@ -109,16 +132,13 @@ All tests passing including:
 - 3 tools::bash tests
 - 3 tools::read tests
 - 3 tools::write tests
+- 4 tools::edit tests (NEW!)
+- 4 tools::grep tests (NEW!)
+- 3 tools::find tests (NEW!)
+- 3 tools::ls tests (NEW!)
 ```
 
 ## Remaining Work
-
-### Phase 6: Additional Tools
-Extended tool support (stubs in place, need full implementation):
-- [ ] Edit tool with diff support
-- [ ] Grep tool respecting .gitignore
-- [ ] Find tool with glob patterns
-- [ ] Ls tool with extended attributes
 
 ### Phase 7: Hook System ✅ (Basic Implementation Complete)
 Core hook system is implemented with tests passing:
