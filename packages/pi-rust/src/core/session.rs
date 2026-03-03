@@ -1,11 +1,14 @@
 // Agent session state machine
 use super::events::{AgentEvent, EventBus};
 use super::hooks::{HookContext, HookEvent, HookRegistry};
-use super::messages::{Message, MessageContent, SessionEntry};
+use super::messages::{ContentBlock, Message, MessageContent, SessionEntry};
 use super::persistence::SessionManager;
 use crate::tools::ToolRegistry;
+use crate::utils::llm::{AnthropicClient, LlmContent, LlmContentBlock, LlmMessage, StreamChunk};
 use anyhow::{Context, Result};
+use std::io::Write;
 use std::sync::Arc;
+use tokio_stream::StreamExt;
 
 /// Agent session state
 pub struct AgentSession {
@@ -227,6 +230,305 @@ impl AgentSession {
     /// Get session ID
     pub fn session_id(&self) -> &str {
         &self.id
+    }
+
+    /// Build Anthropic-format messages from conversation history
+    fn build_llm_messages(&self) -> Vec<LlmMessage> {
+        self.get_conversation_history()
+            .into_iter()
+            .filter(|m| {
+                matches!(
+                    m.role,
+                    super::messages::MessageRole::User | super::messages::MessageRole::Assistant
+                )
+            })
+            .map(|m| {
+                let role = match m.role {
+                    super::messages::MessageRole::User => "user",
+                    super::messages::MessageRole::Assistant => "assistant",
+                    super::messages::MessageRole::System => "user",
+                }
+                .to_string();
+
+                let content = match &m.content {
+                    MessageContent::Text(t) => LlmContent::Text(t.clone()),
+                    MessageContent::Blocks(blocks) => {
+                        let llm_blocks: Vec<LlmContentBlock> = blocks
+                            .iter()
+                            .filter_map(|b| match b {
+                                ContentBlock::Text { text } => {
+                                    Some(LlmContentBlock::Text { text: text.clone() })
+                                }
+                                ContentBlock::ToolUse { id, name, input } => {
+                                    Some(LlmContentBlock::ToolUse {
+                                        id: id.clone(),
+                                        name: name.clone(),
+                                        input: input.clone(),
+                                    })
+                                }
+                                ContentBlock::ToolResult {
+                                    tool_use_id,
+                                    content,
+                                    is_error,
+                                } => Some(LlmContentBlock::ToolResult {
+                                    tool_use_id: tool_use_id.clone(),
+                                    content: content.clone(),
+                                    is_error: *is_error,
+                                }),
+                                ContentBlock::Thinking { .. } => None,
+                            })
+                            .collect();
+                        LlmContent::Blocks(llm_blocks)
+                    }
+                };
+
+                LlmMessage { role, content }
+            })
+            .collect()
+    }
+
+    /// Run the agent loop: send user input to the LLM and handle tool calls.
+    /// Returns the final text response from the assistant.
+    pub async fn run(&mut self, user_input: String, llm_client: &AnthropicClient) -> Result<String> {
+        // Add user message
+        self.add_user_message(user_input).await?;
+
+        // Build tool definitions
+        let tools: Vec<crate::utils::llm::AnthropicTool> = {
+            let tool_names: Vec<String> = self
+                .tool_registry
+                .list()
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+
+            tool_names
+                .iter()
+                .filter_map(|name| self.tool_registry.get(name))
+                .map(|t| crate::utils::llm::AnthropicTool {
+                    name: t.name().to_string(),
+                    description: t.description().to_string(),
+                    input_schema: t.input_schema(),
+                })
+                .collect()
+        };
+
+        let model = Some(llm_client.default_model.clone());
+        let mut final_text = String::new();
+
+        loop {
+            let messages = self.build_llm_messages();
+
+            // Emit turn start
+            let turn_id = uuid::Uuid::new_v4().to_string();
+            self.event_bus.emit(AgentEvent::TurnStart {
+                turn_id: turn_id.clone(),
+            })?;
+
+            // Stream the response
+            let mut stream = llm_client
+                .stream_message(messages, None, tools.clone(), model.clone(), 8192)
+                .await
+                .context("Failed to start LLM stream")?;
+
+            let mut text_buf = String::new();
+            let mut tool_calls: Vec<(String, String, String)> = Vec::new(); // (id, name, json)
+            let mut current_tool: Option<(String, String, String)> = None;
+            let mut stop_reason: Option<String> = None;
+            let mut in_tool_block = false;
+
+            while let Some(chunk) = stream.next().await {
+                match chunk.context("Stream chunk error")? {
+                    StreamChunk::Text(t) => {
+                        print!("{}", t);
+                        let _ = std::io::stdout().flush();
+                        text_buf.push_str(&t);
+
+                        self.event_bus.emit(AgentEvent::MessageUpdate {
+                            message_id: turn_id.clone(),
+                            content: t,
+                        })?;
+                    }
+                    StreamChunk::ToolUseStart { id, name } => {
+                        current_tool = Some((id.clone(), name.clone(), String::new()));
+                        in_tool_block = true;
+
+                        self.event_bus.emit(AgentEvent::ToolCall {
+                            tool_id: id,
+                            tool_name: name,
+                            input: serde_json::Value::Null,
+                        })?;
+                    }
+                    StreamChunk::ToolUseDelta(delta) => {
+                        if let Some((_, _, ref mut json)) = current_tool {
+                            json.push_str(&delta);
+                        }
+                    }
+                    StreamChunk::ToolUseEnd => {
+                        if in_tool_block {
+                            if let Some(tool) = current_tool.take() {
+                                tool_calls.push(tool);
+                            }
+                            in_tool_block = false;
+                        }
+                    }
+                    StreamChunk::Done {
+                        stop_reason: sr,
+                        input_tokens,
+                        output_tokens,
+                    } => {
+                        stop_reason = sr;
+                        if let (Some(inp), Some(out)) = (input_tokens, output_tokens) {
+                            self.event_bus.emit(AgentEvent::ContextUsage {
+                                input_tokens: inp as usize,
+                                output_tokens: out as usize,
+                                cache_read_tokens: 0,
+                                cache_creation_tokens: 0,
+                            })?;
+                        }
+                    }
+                }
+            }
+
+            if !text_buf.is_empty() && tool_calls.is_empty() {
+                // End-turn with text only
+                println!();
+            }
+
+            self.event_bus.emit(AgentEvent::TurnEnd {
+                turn_id: turn_id.clone(),
+            })?;
+
+            // Build assistant message content
+            let assistant_blocks: Vec<ContentBlock> = {
+                let mut blocks = Vec::new();
+                if !text_buf.is_empty() {
+                    blocks.push(ContentBlock::Text {
+                        text: text_buf.clone(),
+                    });
+                }
+                for (id, name, json) in &tool_calls {
+                    let input: serde_json::Value =
+                        serde_json::from_str(json).unwrap_or(serde_json::Value::Object(
+                            serde_json::Map::new(),
+                        ));
+                    blocks.push(ContentBlock::ToolUse {
+                        id: id.clone(),
+                        name: name.clone(),
+                        input,
+                    });
+                }
+                blocks
+            };
+
+            let assistant_content = if assistant_blocks.is_empty() {
+                MessageContent::Text(String::new())
+            } else {
+                MessageContent::Blocks(assistant_blocks)
+            };
+
+            self.add_assistant_message(assistant_content).await?;
+            final_text = text_buf;
+
+            match stop_reason.as_deref() {
+                Some("tool_use") if !tool_calls.is_empty() => {
+                    // Execute tools and add results
+                    let mut result_blocks: Vec<ContentBlock> = Vec::new();
+
+                    for (id, name, json) in &tool_calls {
+                        let input: serde_json::Value =
+                            serde_json::from_str(json).unwrap_or(serde_json::Value::Object(
+                                serde_json::Map::new(),
+                            ));
+
+                        eprintln!("[tool] {} called with {}", name, json);
+
+                        let tool_result = if let Some(tool) = self.tool_registry.get(name) {
+                            match tool.execute(input).await {
+                                Ok(result) => {
+                                    self.event_bus.emit(AgentEvent::ToolResult {
+                                        tool_id: id.clone(),
+                                        tool_name: name.clone(),
+                                        output: result.output.clone(),
+                                        is_error: !result.success,
+                                    })?;
+
+                                    crate::core::messages::ToolResult {
+                                        tool_use_id: id.clone(),
+                                        content: result.output,
+                                        is_error: if result.success { None } else { Some(true) },
+                                    }
+                                }
+                                Err(e) => {
+                                    let err_msg = format!("Tool execution error: {}", e);
+                                    self.event_bus.emit(AgentEvent::ToolResult {
+                                        tool_id: id.clone(),
+                                        tool_name: name.clone(),
+                                        output: err_msg.clone(),
+                                        is_error: true,
+                                    })?;
+
+                                    crate::core::messages::ToolResult {
+                                        tool_use_id: id.clone(),
+                                        content: err_msg,
+                                        is_error: Some(true),
+                                    }
+                                }
+                            }
+                        } else {
+                            let err_msg = format!("Unknown tool: {}", name);
+                            crate::core::messages::ToolResult {
+                                tool_use_id: id.clone(),
+                                content: err_msg,
+                                is_error: Some(true),
+                            }
+                        };
+
+                        result_blocks.push(ContentBlock::ToolResult {
+                            tool_use_id: tool_result.tool_use_id,
+                            content: tool_result.content,
+                            is_error: tool_result.is_error,
+                        });
+                    }
+
+                    // Add tool results as a user message and loop
+                    self.add_user_message_blocks(result_blocks).await?;
+                    // continue loop
+                }
+                _ => {
+                    // end_turn or unknown: we're done
+                    break;
+                }
+            }
+        }
+
+        Ok(final_text)
+    }
+
+    /// Add a user message with structured content blocks (for tool results)
+    async fn add_user_message_blocks(&mut self, blocks: Vec<ContentBlock>) -> Result<String> {
+        let message = Message {
+            id: uuid::Uuid::new_v4().to_string(),
+            parent_id: Some(self.current_head.clone().unwrap_or_default()),
+            role: super::messages::MessageRole::User,
+            content: MessageContent::Blocks(blocks),
+            timestamp: Some(chrono::Utc::now().timestamp()),
+            model: None,
+            stop_reason: None,
+            metadata: None,
+        };
+
+        let message_id = message.id.clone();
+        let entry = SessionEntry::Message(message);
+
+        self.entries.push(entry.clone());
+        self.session_manager
+            .append_entry(&self.id, &entry)
+            .await
+            .context("Failed to persist tool result message")?;
+        self.current_head = Some(message_id.clone());
+
+        Ok(message_id)
     }
 }
 
