@@ -7,3 +7,4 @@ pub mod hooks;
 pub mod compaction;
 pub mod persistence;
 pub mod settings;
+pub mod system_prompt;

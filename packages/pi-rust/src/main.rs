@@ -5,7 +5,7 @@ use pi_coding_agent::{
         hooks::HookRegistry,
     },
     tools::ToolRegistry,
-    utils::llm::AnthropicClient,
+    modes::print::run_print_mode,
     cli::args::{Cli, Commands},
     VERSION,
 };
@@ -85,46 +85,36 @@ async fn main() -> Result<()> {
             // Interactive mode or single message
             let session_id = cli.session.unwrap_or_else(|| "default".to_string());
 
-            // Try to load existing session or create new one
-            let mut session = match AgentSession::load(
-                session_id.clone(),
-                session_manager.clone(),
-                tool_registry.clone(),
-                hook_registry.clone(),
-            ).await {
-                Ok(s) => {
-                    println!("Loaded existing session: {}", session_id);
-                    s
-                }
-                Err(_) => {
-                    println!("Creating new session: {}", session_id);
-                    session_manager.create_session(&session_id).await?;
-                    AgentSession::new(session_id, session_manager, tool_registry, hook_registry)
-                }
-            };
-
             if let Some(message) = cli.message {
                 println!("\nUser: {}", message);
-
-                // Use LLM if API key is available, otherwise fall back to echo
-                match AnthropicClient::from_env() {
-                    Ok(client) => {
-                        print!("Assistant: ");
-                        let _ = std::io::Write::flush(&mut std::io::stdout());
-                        session.run(message, &client).await?;
+                run_print_mode(
+                    Some(session_id),
+                    message,
+                    session_manager,
+                    tool_registry,
+                    hook_registry,
+                )
+                .await?;
+            } else {
+                // No message: show session info
+                let session = match AgentSession::load(
+                    session_id.clone(),
+                    session_manager.clone(),
+                    tool_registry.clone(),
+                    hook_registry.clone(),
+                )
+                .await
+                {
+                    Ok(s) => {
+                        println!("Loaded existing session: {}", session_id);
+                        s
                     }
                     Err(_) => {
-                        eprintln!("Note: ANTHROPIC_API_KEY is not set. Using echo mode.");
-                        let response = format!("Echo: {}", message);
-                        println!("Assistant: {}", response);
-                        use pi_coding_agent::core::messages::MessageContent;
-                        session.add_user_message(message).await?;
-                        session.add_assistant_message(MessageContent::Text(response)).await?;
+                        println!("Creating new session: {}", session_id);
+                        session_manager.create_session(&session_id).await?;
+                        AgentSession::new(session_id, session_manager, tool_registry, hook_registry)
                     }
-                }
-
-                println!("\nSession saved to: {}", session.session_id());
-            } else {
+                };
                 println!("\nNo message provided. Use --help for usage information.");
                 println!("\nSession has {} messages.", session.entry_count());
             }
