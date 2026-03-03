@@ -371,4 +371,194 @@ mod tests {
         assert_eq!(base.theme, "light");
         assert!(base.quiet_startup);
     }
+
+    #[test]
+    fn test_settings_merge_optional_fields() {
+        let mut base = Settings::default();
+        let override_settings = Settings {
+            default_provider: Some("anthropic".to_string()),
+            default_model: Some("claude-3".to_string()),
+            shell_path: Some("/bin/zsh".to_string()),
+            shell_command_prefix: Some("exec".to_string()),
+            ..Default::default()
+        };
+
+        base.merge(&override_settings);
+
+        assert_eq!(base.default_provider, Some("anthropic".to_string()));
+        assert_eq!(base.default_model, Some("claude-3".to_string()));
+        assert_eq!(base.shell_path, Some("/bin/zsh".to_string()));
+        assert_eq!(base.shell_command_prefix, Some("exec".to_string()));
+    }
+
+    #[test]
+    fn test_settings_merge_arrays() {
+        let mut base = Settings::default();
+        let override_settings = Settings {
+            extensions: vec!["ext1".to_string(), "ext2".to_string()],
+            skills: vec!["skill1".to_string()],
+            prompts: vec!["prompt1".to_string()],
+            themes: vec!["custom_theme".to_string()],
+            enabled_models: vec!["model1".to_string(), "model2".to_string()],
+            ..Default::default()
+        };
+
+        base.merge(&override_settings);
+
+        assert_eq!(base.extensions, vec!["ext1", "ext2"]);
+        assert_eq!(base.skills, vec!["skill1"]);
+        assert_eq!(base.prompts, vec!["prompt1"]);
+        assert_eq!(base.themes, vec!["custom_theme"]);
+        assert_eq!(base.enabled_models, vec!["model1", "model2"]);
+    }
+
+    #[test]
+    fn test_settings_merge_doesnt_override_none_optional_fields() {
+        let mut base = Settings {
+            default_provider: Some("existing".to_string()),
+            shell_path: Some("/bin/bash".to_string()),
+            ..Default::default()
+        };
+        let override_settings = Settings::default(); // All None
+
+        base.merge(&override_settings);
+
+        // Should keep existing values when override is None
+        assert_eq!(base.default_provider, Some("existing".to_string()));
+        assert_eq!(base.shell_path, Some("/bin/bash".to_string()));
+    }
+
+    #[test]
+    fn test_settings_merge_doesnt_override_empty_arrays() {
+        let mut base = Settings {
+            extensions: vec!["ext1".to_string()],
+            ..Default::default()
+        };
+        let override_settings = Settings::default(); // Empty arrays
+
+        base.merge(&override_settings);
+
+        // Should keep existing when override is empty
+        assert_eq!(base.extensions, vec!["ext1"]);
+    }
+
+    #[test]
+    fn test_settings_from_nonexistent_file() {
+        let result = Settings::from_file("/nonexistent/settings.toml");
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.theme, "dark"); // default
+    }
+
+    #[test]
+    fn test_settings_manager() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_dir = temp_dir.path().join("config");
+        let project_dir = temp_dir.path().join("project");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::create_dir_all(&project_dir).unwrap();
+
+        let manager = SettingsManager::new(&project_dir, &config_dir).unwrap();
+        assert_eq!(manager.settings().theme, "dark"); // default
+    }
+
+    #[test]
+    fn test_settings_manager_with_global_settings() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_dir = temp_dir.path().join("config");
+        let project_dir = temp_dir.path().join("project");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::create_dir_all(&project_dir).unwrap();
+
+        // Write global settings
+        let global_settings = Settings {
+            theme: "light".to_string(),
+            ..Default::default()
+        };
+        global_settings.save(config_dir.join("settings.toml")).unwrap();
+
+        let manager = SettingsManager::new(&project_dir, &config_dir).unwrap();
+        assert_eq!(manager.settings().theme, "light");
+    }
+
+    #[test]
+    fn test_settings_manager_project_overrides_global() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_dir = temp_dir.path().join("config");
+        let project_dir = temp_dir.path().join("project");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::create_dir_all(project_dir.join(".pi")).unwrap();
+
+        // Write global settings
+        let global_settings = Settings {
+            theme: "light".to_string(),
+            quiet_startup: false,
+            ..Default::default()
+        };
+        global_settings.save(config_dir.join("settings.toml")).unwrap();
+
+        // Write project settings that override
+        let project_settings = Settings {
+            theme: "monokai".to_string(),
+            quiet_startup: true,
+            ..Default::default()
+        };
+        project_settings.save(project_dir.join(".pi/settings.toml")).unwrap();
+
+        let manager = SettingsManager::new(&project_dir, &config_dir).unwrap();
+        assert_eq!(manager.settings().theme, "monokai");
+        assert!(manager.settings().quiet_startup);
+    }
+
+    #[test]
+    fn test_settings_manager_save() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_dir = temp_dir.path().join("config");
+        let project_dir = temp_dir.path().join("project");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::create_dir_all(project_dir.join(".pi")).unwrap();
+
+        let mut manager = SettingsManager::new(&project_dir, &config_dir).unwrap();
+        manager.settings_mut().theme = "custom".to_string();
+        manager.save_global().unwrap();
+        manager.save_project().unwrap();
+
+        // Reload and verify
+        let manager2 = SettingsManager::new(&project_dir, &config_dir).unwrap();
+        assert_eq!(manager2.settings().theme, "custom");
+    }
+
+    #[test]
+    fn test_thinking_level_default() {
+        let level = ThinkingLevel::default();
+        assert_eq!(level, ThinkingLevel::Medium);
+    }
+
+    #[test]
+    fn test_thinking_level_serialization() {
+        let settings = Settings {
+            default_thinking_level: ThinkingLevel::High,
+            ..Default::default()
+        };
+        let toml = toml::to_string(&settings).unwrap();
+        assert!(toml.contains("high"));
+    }
+
+    #[test]
+    fn test_nested_settings_defaults() {
+        let compaction = CompactionSettings::default();
+        assert!(compaction.enabled);
+        assert_eq!(compaction.reserve_tokens, 16384);
+
+        let branch = BranchSummarySettings::default();
+        assert_eq!(branch.reserve_tokens, 16384);
+
+        let retry = RetrySettings::default();
+        assert!(retry.enabled);
+        assert_eq!(retry.max_retries, 3);
+
+        let terminal = TerminalSettings::default();
+        assert!(terminal.show_images);
+        assert!(!terminal.clear_on_shrink);
+    }
 }

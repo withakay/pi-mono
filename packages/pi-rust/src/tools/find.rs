@@ -206,4 +206,70 @@ mod tests {
         println!("Output: {}", result.output);
         assert!(result.output.contains("testfile") || result.output.contains("No files found"));
     }
+
+    #[tokio::test]
+    async fn test_find_trait_methods() {
+        let tool = FindTool::new();
+        assert_eq!(tool.name(), "find");
+        assert!(!tool.description().is_empty());
+        let schema = tool.input_schema();
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"]["pattern"].is_object());
+    }
+
+    #[tokio::test]
+    async fn test_find_no_matches() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(temp_dir.path().join("file.txt"), "text").await.unwrap();
+
+        let tool = FindTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "pattern": "*.xyz"
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("No files found"));
+    }
+
+    #[tokio::test]
+    async fn test_find_directory_type() {
+        let temp_dir = TempDir::new().unwrap();
+        let subdir = temp_dir.path().join("mydir");
+        fs::create_dir(&subdir).await.unwrap();
+        fs::write(temp_dir.path().join("myfile"), "text").await.unwrap();
+
+        let tool = FindTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "pattern": "my*",
+            "type": "d"
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+    }
+
+    #[tokio::test]
+    async fn test_find_absolute_path() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(temp_dir.path().join("abs.txt"), "text").await.unwrap();
+
+        let tool = FindTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "pattern": "*.txt",
+            "path": temp_dir.path().to_str().unwrap()
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("abs.txt"));
+    }
+
+    #[tokio::test]
+    async fn test_find_invalid_input() {
+        let tool = FindTool::new();
+        let input = serde_json::json!({});
+        let result = tool.execute(input).await;
+        assert!(result.is_err() || !result.unwrap().success);
+    }
 }

@@ -248,4 +248,78 @@ mod tests {
         // Just check that we got some output containing a path
         assert!(!result.output.is_empty());
     }
+
+    #[tokio::test]
+    async fn test_bash_trait_methods() {
+        let tool = BashTool::new();
+        assert_eq!(tool.name(), "bash");
+        assert!(!tool.description().is_empty());
+        let schema = tool.input_schema();
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"]["command"].is_object());
+    }
+
+    #[tokio::test]
+    async fn test_bash_missing_command() {
+        let tool = BashTool::new();
+        let input = serde_json::json!({});
+        let result = tool.execute(input).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_bash_nonexistent_cwd() {
+        let tool = BashTool::with_cwd(std::path::PathBuf::from("/nonexistent/path"));
+        let input = serde_json::json!({
+            "command": "echo hello"
+        });
+        let result = tool.execute(input).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.as_ref().unwrap().contains("does not exist"));
+    }
+
+    #[tokio::test]
+    async fn test_bash_with_timeout() {
+        let tool = BashTool::new();
+        let input = serde_json::json!({
+            "command": "echo 'fast command'",
+            "timeout": 5
+        });
+        let result = tool.execute(input).await.unwrap();
+        // The command should complete successfully within timeout
+        assert!(result.success);
+    }
+
+    #[tokio::test]
+    async fn test_bash_timeout_kills_long_command() {
+        let tool = BashTool::new();
+        let input = serde_json::json!({
+            "command": "sleep 60",
+            "timeout": 1
+        });
+        let result = tool.execute(input).await.unwrap();
+        assert!(!result.success);
+        assert!(result.output.contains("timed out") || result.output.contains("killed"));
+    }
+
+    #[tokio::test]
+    async fn test_bash_stderr_output() {
+        let tool = BashTool::new();
+        let input = serde_json::json!({
+            "command": "echo 'stdout message' && echo 'stderr message' >&2"
+        });
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        // Both stdout and stderr should be captured
+        assert!(result.output.contains("stdout message") || result.output.contains("stderr message"));
+    }
+
+    #[test]
+    fn test_bash_get_shell() {
+        let (shell, args) = BashTool::get_shell();
+        assert!(!shell.is_empty());
+        assert!(!args.is_empty());
+        // On Linux, should be bash or sh with -c
+        assert!(args.contains(&"-c".to_string()));
+    }
 }

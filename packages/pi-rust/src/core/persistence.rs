@@ -251,4 +251,32 @@ mod tests {
             }
         }
     }
+
+    #[tokio::test]
+    async fn test_load_nonexistent_session() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = SessionManager::new(temp_dir.path().to_path_buf());
+
+        // Loading a session that doesn't exist should return empty vec
+        let entries = manager.load_session("nonexistent").await.unwrap();
+        assert!(entries.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_sessions_nonexistent_dir() {
+        let manager = SessionManager::new(std::path::PathBuf::from("/tmp/nonexistent_session_dir_xyz"));
+
+        // Listing sessions in a nonexistent directory should return empty vec
+        let sessions = manager.list_sessions().await.unwrap();
+        assert!(sessions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_delete_nonexistent_session() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = SessionManager::new(temp_dir.path().to_path_buf());
+
+        // Deleting a nonexistent session should not error
+        manager.delete_session("nonexistent").await.unwrap();
+    }
 }

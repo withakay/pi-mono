@@ -618,4 +618,56 @@ mod tests {
         assert_eq!(history[1].role, MessageRole::Assistant);
         assert_eq!(history[2].role, MessageRole::User);
     }
+
+    #[tokio::test]
+    async fn test_event_bus() {
+        let temp_dir = TempDir::new().unwrap();
+        let session_manager = Arc::new(SessionManager::new(temp_dir.path().to_path_buf()));
+        let tool_registry = Arc::new(ToolRegistry::new());
+        let hook_registry = Arc::new(HookRegistry::new());
+
+        session_manager.create_session("test").await.unwrap();
+
+        let session = AgentSession::new("test".to_string(), session_manager, tool_registry, hook_registry);
+        let _bus = session.event_bus();
+        // Verify event bus is accessible
+        assert_eq!(session.session_id(), "test");
+    }
+
+    #[tokio::test]
+    async fn test_get_messages_filters_non_message_entries() {
+        let temp_dir = TempDir::new().unwrap();
+        let session_manager = Arc::new(SessionManager::new(temp_dir.path().to_path_buf()));
+        let tool_registry = Arc::new(ToolRegistry::new());
+        let hook_registry = Arc::new(HookRegistry::new());
+
+        session_manager.create_session("test").await.unwrap();
+
+        let mut session = AgentSession::new("test".to_string(), session_manager.clone(), tool_registry, hook_registry);
+
+        // Add a user message
+        session.add_user_message("Hello".to_string()).await.unwrap();
+
+        // Manually append a non-message entry to the session file
+        let compaction_entry = SessionEntry::Compaction {
+            id: "comp_1".to_string(),
+            parent_id: None,
+            summary: "compacted".to_string(),
+            removed_count: 5,
+            timestamp: 12345,
+        };
+        session_manager.append_entry("test", &compaction_entry).await.unwrap();
+
+        // Reload session
+        let session2 = AgentSession::load(
+            "test".to_string(),
+            session_manager,
+            Arc::new(ToolRegistry::new()),
+            Arc::new(HookRegistry::new()),
+        ).await.unwrap();
+
+        // Should have 2 entries total but only 1 message
+        assert_eq!(session2.entry_count(), 2);
+        assert_eq!(session2.get_messages().len(), 1);
+    }
 }
