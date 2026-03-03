@@ -2,10 +2,10 @@ use pi_coding_agent::{
     core::{
         persistence::SessionManager,
         session::AgentSession,
-        messages::MessageContent,
         hooks::HookRegistry,
     },
     tools::ToolRegistry,
+    utils::llm::AnthropicClient,
     cli::args::{Cli, Commands},
     VERSION,
 };
@@ -105,12 +105,23 @@ async fn main() -> Result<()> {
 
             if let Some(message) = cli.message {
                 println!("\nUser: {}", message);
-                session.add_user_message(message).await?;
 
-                // For now, just echo back (no LLM integration yet)
-                let response = "Echo: I received your message! (LLM integration coming soon)";
-                println!("Assistant: {}", response);
-                session.add_assistant_message(MessageContent::Text(response.to_string())).await?;
+                // Use LLM if API key is available, otherwise fall back to echo
+                match AnthropicClient::from_env() {
+                    Ok(client) => {
+                        print!("Assistant: ");
+                        let _ = std::io::Write::flush(&mut std::io::stdout());
+                        session.run(message, &client).await?;
+                    }
+                    Err(_) => {
+                        eprintln!("Note: ANTHROPIC_API_KEY is not set. Using echo mode.");
+                        let response = format!("Echo: {}", message);
+                        println!("Assistant: {}", response);
+                        use pi_coding_agent::core::messages::MessageContent;
+                        session.add_user_message(message).await?;
+                        session.add_assistant_message(MessageContent::Text(response)).await?;
+                    }
+                }
 
                 println!("\nSession saved to: {}", session.session_id());
             } else {
