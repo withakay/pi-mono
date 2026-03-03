@@ -4,6 +4,7 @@ use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::env;
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
@@ -407,6 +408,401 @@ impl AnthropicClient {
         }
 
         Ok(response)
+    }
+}
+
+// ── OpenAI-compatible client ──────────────────────────────────────────────────
+
+/// OpenAI-compatible API client (OpenRouter, GitHub Copilot, OpenAI, etc.)
+pub struct OpenAICompatClient {
+    api_key: String,
+    base_url: String,
+    pub default_model: String,
+    extra_headers: HashMap<String, String>,
+    http: Client,
+}
+
+impl OpenAICompatClient {
+    /// OpenRouter client from OPENROUTER_API_KEY env var or auth.json
+    pub fn openrouter_from_env() -> Result<Self> {
+        let api_key = env::var("OPENROUTER_API_KEY").or_else(|_| {
+            crate::utils::auth::get_api_key("openrouter").ok_or_else(|| {
+                anyhow!(
+                    "OPENROUTER_API_KEY not set and no openrouter credentials in auth.json"
+                )
+            })
+        })?;
+        Ok(Self::openrouter(api_key))
+    }
+
+    pub fn openrouter(api_key: impl Into<String>) -> Self {
+        let mut headers = HashMap::new();
+        // `HTTP-Referer` is an OpenRouter-specific custom header for app identification
+        // (not the HTTP standard `Referer`). See: https://openrouter.ai/docs#requests
+        headers.insert(
+            "HTTP-Referer".to_string(),
+            "https://github.com/withakay/pi-mono".to_string(),
+        );
+        headers.insert("X-Title".to_string(), "Pi Coding Agent".to_string());
+        Self {
+            api_key: api_key.into(),
+            base_url: "https://openrouter.ai/api/v1".to_string(),
+            default_model: "anthropic/claude-opus-4-5".to_string(),
+            extra_headers: headers,
+            http: Client::new(),
+        }
+    }
+
+    /// GitHub Copilot client - reads token from auth.json or env
+    pub fn github_copilot_from_env() -> Result<Self> {
+        let api_key = crate::utils::auth::get_api_key("github-copilot")
+            .or_else(|| env::var("COPILOT_GITHUB_TOKEN").ok())
+            .or_else(|| env::var("GH_TOKEN").ok())
+            .ok_or_else(|| {
+                anyhow!(
+                    "No GitHub Copilot token found. Run: pi auth login github-copilot"
+                )
+            })?;
+        Ok(Self::github_copilot(api_key))
+    }
+
+    pub fn github_copilot(token: impl Into<String>) -> Self {
+        let mut headers = HashMap::new();
+        headers.insert("Editor-Version".to_string(), "vscode/1.107.0".to_string());
+        headers.insert(
+            "Editor-Plugin-Version".to_string(),
+            "copilot-chat/0.35.0".to_string(),
+        );
+        headers.insert(
+            "Copilot-Integration-Id".to_string(),
+            "vscode-chat".to_string(),
+        );
+        headers.insert(
+            "openai-intent".to_string(),
+            "conversation-edits".to_string(),
+        );
+        Self {
+            api_key: token.into(),
+            base_url: "https://api.individual.githubcopilot.com".to_string(),
+            default_model: "gpt-4o".to_string(),
+            extra_headers: headers,
+            http: Client::new(),
+        }
+    }
+
+    /// OpenAI Codex client from auth.json or OPENAI_API_KEY env var
+    pub fn openai_codex_from_env() -> Result<Self> {
+        let api_key = crate::utils::auth::get_api_key("openai-codex")
+            .or_else(|| env::var("OPENAI_API_KEY").ok())
+            .ok_or_else(|| {
+                anyhow!("No OpenAI Codex token found. Run: pi auth login openai-codex")
+            })?;
+        Ok(Self::openai_codex(api_key))
+    }
+
+    pub fn openai_codex(token: impl Into<String>) -> Self {
+        Self {
+            api_key: token.into(),
+            base_url: "https://api.openai.com/v1".to_string(),
+            default_model: "gpt-4o".to_string(),
+            extra_headers: HashMap::new(),
+            http: Client::new(),
+        }
+    }
+
+    /// Create a client pointing at a custom base URL (useful for testing)
+    pub fn with_base_url(
+        api_key: impl Into<String>,
+        base_url: impl Into<String>,
+        default_model: impl Into<String>,
+    ) -> Self {
+        Self {
+            api_key: api_key.into(),
+            base_url: base_url.into(),
+            default_model: default_model.into(),
+            extra_headers: HashMap::new(),
+            http: Client::new(),
+        }
+    }
+
+    /// Send a streaming chat completions request.
+    /// Returns a stream of StreamChunk events (same as AnthropicClient).
+    pub async fn stream_message(
+        &self,
+        messages: Vec<LlmMessage>,
+        system: Option<String>,
+        tools: Vec<AnthropicTool>,
+        model: Option<String>,
+        max_tokens: u32,
+    ) -> Result<ReceiverStream<Result<StreamChunk>>> {
+        let model = model.unwrap_or_else(|| self.default_model.clone());
+
+        let mut openai_messages: Vec<serde_json::Value> = Vec::new();
+        if let Some(sys) = system {
+            openai_messages.push(serde_json::json!({
+                "role": "system",
+                "content": sys,
+            }));
+        }
+        for msg in &messages {
+            openai_messages.push(serde_json::to_value(msg)?);
+        }
+
+        let mut body = serde_json::json!({
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": openai_messages,
+            "stream": true,
+        });
+
+        if !tools.is_empty() {
+            let openai_tools: Vec<serde_json::Value> = tools
+                .iter()
+                .map(|t| {
+                    serde_json::json!({
+                        "type": "function",
+                        "function": {
+                            "name": t.name,
+                            "description": t.description,
+                            "parameters": t.input_schema,
+                        }
+                    })
+                })
+                .collect();
+            body["tools"] = serde_json::json!(openai_tools);
+            body["tool_choice"] = serde_json::json!("auto");
+        }
+
+        let url = format!("{}/chat/completions", self.base_url);
+
+        let mut req = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .header("Accept", "text/event-stream");
+
+        for (k, v) in &self.extra_headers {
+            req = req.header(k, v);
+        }
+
+        let response = req
+            .json(&body)
+            .send()
+            .await
+            .context("Failed to send request to OpenAI-compatible API")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            return Err(anyhow!("OpenAI API error {}: {}", status, text));
+        }
+
+        let (tx, rx) = mpsc::channel::<Result<StreamChunk>>(256);
+        let mut byte_stream = response.bytes_stream();
+
+        tokio::spawn(async move {
+            let mut leftover = String::new();
+            // Track in-progress tool calls: index -> (id, name, accumulated_args)
+            let mut tool_calls: HashMap<usize, (String, String, String)> = HashMap::new();
+
+            'outer: loop {
+                let bytes = match byte_stream.next().await {
+                    Some(Ok(b)) => b,
+                    Some(Err(e)) => {
+                        let _ = tx.send(Err(anyhow!("Stream error: {}", e))).await;
+                        break;
+                    }
+                    None => break,
+                };
+
+                leftover.push_str(&String::from_utf8_lossy(&bytes));
+
+                loop {
+                    let newline_pos = match leftover.find('\n') {
+                        Some(p) => p,
+                        None => break,
+                    };
+                    let line = leftover[..newline_pos]
+                        .trim_end_matches('\r')
+                        .to_string();
+                    leftover = leftover[newline_pos + 1..].to_string();
+
+                    if line.is_empty() {
+                        continue;
+                    }
+
+                    if line == "data: [DONE]" {
+                        // Finalize any pending tool calls
+                        let mut keys: Vec<usize> = tool_calls.keys().cloned().collect();
+                        keys.sort();
+                        for idx in keys {
+                            tool_calls.remove(&idx);
+                            let _ = tx.send(Ok(StreamChunk::ToolUseEnd)).await;
+                        }
+                        let _ = tx
+                            .send(Ok(StreamChunk::Done {
+                                stop_reason: Some("end_turn".to_string()),
+                                input_tokens: None,
+                                output_tokens: None,
+                            }))
+                            .await;
+                        break 'outer;
+                    }
+
+                    if let Some(data) = line.strip_prefix("data: ") {
+                        let v: serde_json::Value = match serde_json::from_str(data) {
+                            Ok(v) => v,
+                            Err(_) => continue,
+                        };
+
+                        if let Some(choices) = v["choices"].as_array() {
+                            for choice in choices {
+                                let delta = &choice["delta"];
+                                let finish_reason = choice["finish_reason"].as_str();
+
+                                if let Some(content) = delta["content"].as_str() {
+                                    if !content.is_empty() {
+                                        let _ = tx
+                                            .send(Ok(StreamChunk::Text(content.to_string())))
+                                            .await;
+                                    }
+                                }
+
+                                if let Some(tc_array) = delta["tool_calls"].as_array() {
+                                    for tc in tc_array {
+                                        let idx =
+                                            tc["index"].as_u64().unwrap_or(0) as usize;
+
+                                        if let Some(id) = tc["id"].as_str() {
+                                            let name = tc["function"]["name"]
+                                                .as_str()
+                                                .unwrap_or("")
+                                                .to_string();
+                                            let _ = tx
+                                                .send(Ok(StreamChunk::ToolUseStart {
+                                                    id: id.to_string(),
+                                                    name: name.clone(),
+                                                }))
+                                                .await;
+                                            tool_calls.insert(
+                                                idx,
+                                                (id.to_string(), name, String::new()),
+                                            );
+                                        }
+
+                                        if let Some(args_delta) =
+                                            tc["function"]["arguments"].as_str()
+                                        {
+                                            if !args_delta.is_empty() {
+                                                let _ = tx
+                                                    .send(Ok(StreamChunk::ToolUseDelta(
+                                                        args_delta.to_string(),
+                                                    )))
+                                                    .await;
+                                                if let Some(entry) = tool_calls.get_mut(&idx) {
+                                                    entry.2.push_str(args_delta);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if let Some(reason) = finish_reason {
+                                    let mut keys: Vec<usize> =
+                                        tool_calls.keys().cloned().collect();
+                                    keys.sort();
+                                    for key in keys {
+                                        tool_calls.remove(&key);
+                                        let _ = tx.send(Ok(StreamChunk::ToolUseEnd)).await;
+                                    }
+
+                                    // Translate OpenAI finish reasons to Anthropic stop reasons
+                                    let stop_reason = match reason {
+                                        "tool_calls" => "tool_use",
+                                        "stop" => "end_turn",
+                                        other => other,
+                                    };
+
+                                    let _ = tx
+                                        .send(Ok(StreamChunk::Done {
+                                            stop_reason: Some(stop_reason.to_string()),
+                                            input_tokens: v["usage"]["prompt_tokens"]
+                                                .as_u64(),
+                                            output_tokens: v["usage"]["completion_tokens"]
+                                                .as_u64(),
+                                        }))
+                                        .await;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(ReceiverStream::new(rx))
+    }
+}
+
+// ── Unified LLM client ────────────────────────────────────────────────────────
+
+/// Unified LLM client that can use any supported provider
+pub enum LlmClient {
+    Anthropic(AnthropicClient),
+    OpenAICompat(OpenAICompatClient),
+}
+
+impl LlmClient {
+    /// Auto-detect the best available LLM client from environment.
+    /// Priority: ANTHROPIC_API_KEY > OPENROUTER_API_KEY > github-copilot (auth.json) > openai-codex (auth.json)
+    pub fn from_env() -> Result<Self> {
+        if let Ok(client) = AnthropicClient::from_env() {
+            return Ok(Self::Anthropic(client));
+        }
+        if let Ok(client) = OpenAICompatClient::openrouter_from_env() {
+            return Ok(Self::OpenAICompat(client));
+        }
+        if let Ok(client) = OpenAICompatClient::github_copilot_from_env() {
+            return Ok(Self::OpenAICompat(client));
+        }
+        if let Ok(client) = OpenAICompatClient::openai_codex_from_env() {
+            return Ok(Self::OpenAICompat(client));
+        }
+        Err(anyhow!(
+            "No LLM provider configured. Set one of:\n  \
+             ANTHROPIC_API_KEY  - Anthropic Claude\n  \
+             OPENROUTER_API_KEY - OpenRouter\n  \
+             Or run: pi auth login github-copilot\n  \
+             Or run: pi auth login openai-codex"
+        ))
+    }
+
+    pub fn default_model(&self) -> &str {
+        match self {
+            Self::Anthropic(c) => &c.default_model,
+            Self::OpenAICompat(c) => &c.default_model,
+        }
+    }
+
+    pub async fn stream_message(
+        &self,
+        messages: Vec<LlmMessage>,
+        system: Option<String>,
+        tools: Vec<AnthropicTool>,
+        model: Option<String>,
+        max_tokens: u32,
+    ) -> Result<ReceiverStream<Result<StreamChunk>>> {
+        match self {
+            Self::Anthropic(c) => {
+                c.stream_message(messages, system, tools, model, max_tokens)
+                    .await
+            }
+            Self::OpenAICompat(c) => {
+                c.stream_message(messages, system, tools, model, max_tokens)
+                    .await
+            }
+        }
     }
 }
 

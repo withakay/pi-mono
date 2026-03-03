@@ -6,7 +6,7 @@ use crate::core::hooks::HookRegistry;
 use crate::core::persistence::SessionManager;
 use crate::core::session::AgentSession;
 use crate::tools::ToolRegistry;
-use crate::utils::llm::AnthropicClient;
+use crate::utils::llm::LlmClient;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -83,13 +83,13 @@ async fn process_rpc_request(
         }
     };
 
-    let response = match AnthropicClient::from_env() {
+    let response = match LlmClient::from_env() {
         Ok(client) => {
             session.run(request.message, &client).await?
         }
         Err(_) => {
             session.add_user_message(request.message.clone()).await?;
-            let echo = format!("Echo: {} (ANTHROPIC_API_KEY not set)", request.message);
+            let echo = format!("Echo: {} (no LLM provider configured)", request.message);
             session.add_assistant_message(
                 crate::core::messages::MessageContent::Text(echo.clone())
             ).await?;
