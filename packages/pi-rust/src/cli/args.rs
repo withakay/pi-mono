@@ -1,6 +1,22 @@
 // CLI argument parsing using clap
 use clap::{Parser, Subcommand};
 
+#[derive(Subcommand, Debug)]
+pub enum AuthCommands {
+    /// Login to an OAuth provider
+    Login {
+        /// Provider to login to (github-copilot, openai-codex, openrouter)
+        provider: String,
+    },
+    /// Show authentication status
+    Status,
+    /// Logout from a provider
+    Logout {
+        /// Provider to logout from
+        provider: String,
+    },
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "pi")]
 #[command(author, version, about = "Pi Coding Agent - Rust Port", long_about = None)]
@@ -42,6 +58,12 @@ pub enum Commands {
     Info {
         /// Session ID
         id: String,
+    },
+
+    /// Manage authentication
+    Auth {
+        #[command(subcommand)]
+        action: AuthCommands,
     },
 }
 

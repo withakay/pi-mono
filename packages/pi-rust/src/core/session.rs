@@ -4,7 +4,7 @@ use super::hooks::{HookContext, HookEvent, HookRegistry};
 use super::messages::{ContentBlock, Message, MessageContent, SessionEntry};
 use super::persistence::SessionManager;
 use crate::tools::ToolRegistry;
-use crate::utils::llm::{AnthropicClient, LlmContent, LlmContentBlock, LlmMessage, StreamChunk};
+use crate::utils::llm::{LlmClient, LlmContent, LlmContentBlock, LlmMessage, StreamChunk};
 use anyhow::{Context, Result};
 use std::io::Write;
 use std::sync::Arc;
@@ -289,7 +289,7 @@ impl AgentSession {
 
     /// Run the agent loop: send user input to the LLM and handle tool calls.
     /// Returns the final text response from the assistant.
-    pub async fn run(&mut self, user_input: String, llm_client: &AnthropicClient) -> Result<String> {
+    pub async fn run(&mut self, user_input: String, llm_client: &LlmClient) -> Result<String> {
         // Add user message
         self.add_user_message(user_input).await?;
 
@@ -313,7 +313,7 @@ impl AgentSession {
                 .collect()
         };
 
-        let model = Some(llm_client.default_model.clone());
+        let model = Some(llm_client.default_model().to_string());
         let mut final_text = String::new();
 
         loop {

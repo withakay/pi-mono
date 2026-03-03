@@ -14,7 +14,7 @@ use crate::core::persistence::SessionManager;
 use crate::core::session::AgentSession;
 use crate::tools::ToolRegistry;
 use crate::ui::App;
-use crate::utils::llm::AnthropicClient;
+use crate::utils::llm::LlmClient;
 use anyhow::Result;
 
 pub async fn run_interactive_mode(
@@ -57,7 +57,7 @@ pub async fn run_interactive_mode(
         }
     }
 
-    let llm_client = AnthropicClient::from_env().ok();
+    let llm_client = LlmClient::from_env().ok();
 
     loop {
         terminal.draw(|f| app.render(f))?;
@@ -92,7 +92,7 @@ pub async fn run_interactive_mode(
                         }
                     } else {
                         let echo =
-                            format!("Echo: {} (set ANTHROPIC_API_KEY for LLM)", message);
+                            format!("Echo: {} (no LLM provider configured)", message);
                         app.add_message("Assistant".to_string(), echo.clone());
                         session.add_user_message(message).await?;
                         session

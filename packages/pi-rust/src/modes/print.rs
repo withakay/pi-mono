@@ -5,7 +5,7 @@ use crate::core::messages::MessageContent;
 use crate::core::persistence::SessionManager;
 use crate::core::session::AgentSession;
 use crate::tools::ToolRegistry;
-use crate::utils::llm::AnthropicClient;
+use crate::utils::llm::LlmClient;
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -36,15 +36,14 @@ pub async fn run_print_mode(
     };
 
     // Use LLM if API key is available, otherwise fall back to echo
-    match AnthropicClient::from_env() {
+    match LlmClient::from_env() {
         Ok(client) => {
             print!("Assistant: ");
             let _ = std::io::Write::flush(&mut std::io::stdout());
-            // TODO: capture and display the final response if streaming doesn't print it
             session.run(message, &client).await?;
         }
         Err(_) => {
-            eprintln!("Warning: ANTHROPIC_API_KEY not set. Running in echo mode.");
+            eprintln!("Warning: No LLM provider configured. Running in echo mode.");
             let response = format!("Echo: {}", message);
             println!("{}", response);
             session.add_user_message(message).await?;
