@@ -108,54 +108,18 @@ impl Tool for BashTool {
         let mut output = String::new();
         let mut truncated = false;
 
-        // Collect output with timeout
-        let result = if let Some(secs) = timeout_secs {
-            tokio::time::timeout(
-                std::time::Duration::from_secs(secs),
-                async {
-                    // Read both stdout and stderr concurrently
-                    loop {
-                        tokio::select! {
-                            line = stdout_reader.next_line() => {
-                                match line {
-                                    Ok(Some(line)) => {
-                                        output.push_str(&line);
-                                        output.push('\n');
-                                        if output.len() > DEFAULT_MAX_OUTPUT {
-                                            truncated = true;
-                                            break;
-                                        }
-                                    }
-                                    Ok(None) => break,
-                                    Err(e) => return Err(e),
-                                }
-                            }
-                            line = stderr_reader.next_line() => {
-                                match line {
-                                    Ok(Some(line)) => {
-                                        output.push_str(&line);
-                                        output.push('\n');
-                                        if output.len() > DEFAULT_MAX_OUTPUT {
-                                            truncated = true;
-                                            break;
-                                        }
-                                    }
-                                    Ok(None) => break,
-                                    Err(e) => return Err(e),
-                                }
-                            }
-                        }
-                    }
-                    Ok::<(), std::io::Error>(())
-                }
-            )
-            .await
-        } else {
-            // No timeout
-            Ok(async {
+        // Helper macro logic: read until both streams are exhausted
+        // Track which streams are done so we don't drop data from the other
+        macro_rules! read_streams {
+            () => {{
+                let mut stdout_done = false;
+                let mut stderr_done = false;
                 loop {
+                    if stdout_done && stderr_done {
+                        break;
+                    }
                     tokio::select! {
-                        line = stdout_reader.next_line() => {
+                        line = stdout_reader.next_line(), if !stdout_done => {
                             match line {
                                 Ok(Some(line)) => {
                                     output.push_str(&line);
@@ -165,11 +129,11 @@ impl Tool for BashTool {
                                         break;
                                     }
                                 }
-                                Ok(None) => break,
+                                Ok(None) => stdout_done = true,
                                 Err(e) => return Err(e),
                             }
                         }
-                        line = stderr_reader.next_line() => {
+                        line = stderr_reader.next_line(), if !stderr_done => {
                             match line {
                                 Ok(Some(line)) => {
                                     output.push_str(&line);
@@ -179,15 +143,26 @@ impl Tool for BashTool {
                                         break;
                                     }
                                 }
-                                Ok(None) => break,
+                                Ok(None) => stderr_done = true,
                                 Err(e) => return Err(e),
                             }
                         }
                     }
                 }
                 Ok::<(), std::io::Error>(())
-            }
-            .await)
+            }};
+        }
+
+        // Collect output with timeout
+        let result = if let Some(secs) = timeout_secs {
+            tokio::time::timeout(
+                std::time::Duration::from_secs(secs),
+                async { read_streams!() },
+            )
+            .await
+        } else {
+            // No timeout
+            Ok(async { read_streams!() }.await)
         };
 
         // Handle timeout or other errors
