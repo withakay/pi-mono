@@ -6,6 +6,8 @@ use pi_coding_agent::{
     },
     tools::ToolRegistry,
     modes::print::run_print_mode,
+    modes::interactive::run_interactive_mode,
+    modes::rpc::run_rpc_mode,
     cli::args::{Cli, Commands},
     VERSION,
 };
@@ -32,6 +34,10 @@ async fn main() -> Result<()> {
     let hook_registry = Arc::new(HookRegistry::new());
 
     match cli.command {
+        _ if cli.rpc => {
+            run_rpc_mode(session_manager, tool_registry, hook_registry).await?;
+        }
+
         Some(Commands::Sessions) => {
             println!("\nAvailable sessions:");
             let sessions = session_manager.list_sessions().await?;
@@ -83,7 +89,7 @@ async fn main() -> Result<()> {
 
         None => {
             // Interactive mode or single message
-            let session_id = cli.session.unwrap_or_else(|| "default".to_string());
+            let session_id = cli.session.clone().unwrap_or_else(|| "default".to_string());
 
             if let Some(message) = cli.message {
                 println!("\nUser: {}", message);
@@ -96,27 +102,8 @@ async fn main() -> Result<()> {
                 )
                 .await?;
             } else {
-                // No message: show session info
-                let session = match AgentSession::load(
-                    session_id.clone(),
-                    session_manager.clone(),
-                    tool_registry.clone(),
-                    hook_registry.clone(),
-                )
-                .await
-                {
-                    Ok(s) => {
-                        println!("Loaded existing session: {}", session_id);
-                        s
-                    }
-                    Err(_) => {
-                        println!("Creating new session: {}", session_id);
-                        session_manager.create_session(&session_id).await?;
-                        AgentSession::new(session_id, session_manager, tool_registry, hook_registry)
-                    }
-                };
-                println!("\nNo message provided. Use --help for usage information.");
-                println!("\nSession has {} messages.", session.entry_count());
+                // No message: launch interactive TUI mode
+                run_interactive_mode(cli.session, session_manager, tool_registry, hook_registry).await?;
             }
         }
     }

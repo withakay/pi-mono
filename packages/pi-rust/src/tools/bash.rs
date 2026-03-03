@@ -108,86 +108,61 @@ impl Tool for BashTool {
         let mut output = String::new();
         let mut truncated = false;
 
+        async fn collect_process_output(
+            stdout_reader: &mut tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
+            stderr_reader: &mut tokio::io::Lines<BufReader<tokio::process::ChildStderr>>,
+            output: &mut String,
+            truncated: &mut bool,
+        ) -> std::io::Result<()> {
+            let mut stdout_done = false;
+            let mut stderr_done = false;
+            loop {
+                if stdout_done && stderr_done {
+                    break;
+                }
+                tokio::select! {
+                    line = stdout_reader.next_line(), if !stdout_done => {
+                        match line {
+                            Ok(Some(line)) => {
+                                output.push_str(&line);
+                                output.push('\n');
+                                if output.len() > DEFAULT_MAX_OUTPUT {
+                                    *truncated = true;
+                                    break;
+                                }
+                            }
+                            Ok(None) => stdout_done = true,
+                            Err(e) => return Err(e),
+                        }
+                    }
+                    line = stderr_reader.next_line(), if !stderr_done => {
+                        match line {
+                            Ok(Some(line)) => {
+                                output.push_str(&line);
+                                output.push('\n');
+                                if output.len() > DEFAULT_MAX_OUTPUT {
+                                    *truncated = true;
+                                    break;
+                                }
+                            }
+                            Ok(None) => stderr_done = true,
+                            Err(e) => return Err(e),
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
+
         // Collect output with timeout
         let result = if let Some(secs) = timeout_secs {
             tokio::time::timeout(
                 std::time::Duration::from_secs(secs),
-                async {
-                    // Read both stdout and stderr concurrently
-                    loop {
-                        tokio::select! {
-                            line = stdout_reader.next_line() => {
-                                match line {
-                                    Ok(Some(line)) => {
-                                        output.push_str(&line);
-                                        output.push('\n');
-                                        if output.len() > DEFAULT_MAX_OUTPUT {
-                                            truncated = true;
-                                            break;
-                                        }
-                                    }
-                                    Ok(None) => break,
-                                    Err(e) => return Err(e),
-                                }
-                            }
-                            line = stderr_reader.next_line() => {
-                                match line {
-                                    Ok(Some(line)) => {
-                                        output.push_str(&line);
-                                        output.push('\n');
-                                        if output.len() > DEFAULT_MAX_OUTPUT {
-                                            truncated = true;
-                                            break;
-                                        }
-                                    }
-                                    Ok(None) => break,
-                                    Err(e) => return Err(e),
-                                }
-                            }
-                        }
-                    }
-                    Ok::<(), std::io::Error>(())
-                }
+                collect_process_output(&mut stdout_reader, &mut stderr_reader, &mut output, &mut truncated),
             )
             .await
         } else {
-            // No timeout
-            Ok(async {
-                loop {
-                    tokio::select! {
-                        line = stdout_reader.next_line() => {
-                            match line {
-                                Ok(Some(line)) => {
-                                    output.push_str(&line);
-                                    output.push('\n');
-                                    if output.len() > DEFAULT_MAX_OUTPUT {
-                                        truncated = true;
-                                        break;
-                                    }
-                                }
-                                Ok(None) => break,
-                                Err(e) => return Err(e),
-                            }
-                        }
-                        line = stderr_reader.next_line() => {
-                            match line {
-                                Ok(Some(line)) => {
-                                    output.push_str(&line);
-                                    output.push('\n');
-                                    if output.len() > DEFAULT_MAX_OUTPUT {
-                                        truncated = true;
-                                        break;
-                                    }
-                                }
-                                Ok(None) => break,
-                                Err(e) => return Err(e),
-                            }
-                        }
-                    }
-                }
-                Ok::<(), std::io::Error>(())
-            }
-            .await)
+            Ok(collect_process_output(&mut stdout_reader, &mut stderr_reader, &mut output, &mut truncated).await)
         };
 
         // Handle timeout or other errors

@@ -9,6 +9,10 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
 
+    /// Run in RPC mode (reads JSON from stdin, outputs JSON responses)
+    #[arg(long)]
+    pub rpc: bool,
+
     /// Session ID to use/resume
     #[arg(short, long)]
     pub session: Option<String>,
