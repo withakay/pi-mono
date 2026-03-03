@@ -35,6 +35,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ignore = "0.4"
 globset = "0.4"
 walkdir = "2.5"
+regex = "1.11"
 
 # Process execution
 async-process = "2.3"
