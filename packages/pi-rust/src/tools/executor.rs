@@ -1,12 +1,14 @@
 // Executor tool
 use super::{Tool, ToolResult};
+use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value;
-use anyhow::Result;
 
+#[allow(dead_code)]
 pub struct ExecutorTool;
 
 impl ExecutorTool {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self
     }

@@ -1,10 +1,10 @@
 // Settings management
 // Based on TypeScript implementation but using TOML instead of JSON
 
-use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
-use std::fs;
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Compaction settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,21 +79,16 @@ impl Default for TerminalSettings {
 }
 
 /// Thinking level
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ThinkingLevel {
     Off,
     Minimal,
     Low,
+    #[default]
     Medium,
     High,
     XHigh,
-}
-
-impl Default for ThinkingLevel {
-    fn default() -> Self {
-        Self::Medium
-    }
 }
 
 /// Main settings structure
@@ -205,8 +200,7 @@ impl Settings {
                 .with_context(|| format!("Failed to create directory {:?}", parent))?;
         }
 
-        let contents = toml::to_string_pretty(self)
-            .context("Failed to serialize settings")?;
+        let contents = toml::to_string_pretty(self).context("Failed to serialize settings")?;
 
         fs::write(path, contents)
             .with_context(|| format!("Failed to write settings to {:?}", path))?;

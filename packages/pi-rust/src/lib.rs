@@ -1,21 +1,21 @@
 // Pi Coding Agent - Rust Port
 // Main library entry point
 
-pub mod core;
-pub mod tools;
-pub mod modes;
-pub mod ui;
 pub mod cli;
+pub mod core;
+pub mod modes;
+pub mod tools;
+pub mod ui;
 pub mod utils;
 
 // Re-export key types for convenience
 pub use core::{
-    session::AgentSession,
-    messages::{Message, MessageRole, MessageContent},
     events::{AgentEvent, EventBus},
-    hooks::{Hook, HookRegistry, HookEvent, HookContext, LoggingHook},
-    settings::Settings,
+    hooks::{Hook, HookContext, HookEvent, HookRegistry, LoggingHook},
+    messages::{Message, MessageContent, MessageRole},
     persistence::SessionManager,
+    session::AgentSession,
+    settings::Settings,
 };
 
 pub use tools::{Tool, ToolRegistry};

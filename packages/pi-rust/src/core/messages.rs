@@ -167,9 +167,10 @@ impl Message {
     /// Get all tool calls in this message
     pub fn tool_calls(&self) -> Vec<&ContentBlock> {
         match &self.content {
-            MessageContent::Blocks(blocks) => {
-                blocks.iter().filter(|b| matches!(b, ContentBlock::ToolUse { .. })).collect()
-            }
+            MessageContent::Blocks(blocks) => blocks
+                .iter()
+                .filter(|b| matches!(b, ContentBlock::ToolUse { .. }))
+                .collect(),
             _ => vec![],
         }
     }
@@ -238,7 +239,7 @@ mod tests {
         let msg = Message::user("Hello, world!");
         assert_eq!(msg.role, MessageRole::User);
         assert_eq!(msg.text_content(), Some("Hello, world!"));
-        assert!(msg.id.len() > 0);
+        assert!(!msg.id.is_empty());
     }
 
     #[test]

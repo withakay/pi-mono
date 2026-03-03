@@ -2,7 +2,7 @@
 
 pub mod app;
 pub mod editor;
-pub mod messages;
 pub mod footer;
-pub mod theme;
 pub mod keybindings;
+pub mod messages;
+pub mod theme;

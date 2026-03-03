@@ -1,19 +1,19 @@
 // Tools module - Built-in tools for file operations, bash, etc.
 
 mod bash;
+mod edit;
+mod executor;
+mod find;
+mod grep;
+mod ls;
 mod read;
 mod write;
-mod edit;
-mod grep;
-mod find;
-mod ls;
-mod executor;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use anyhow::Result;
 
 /// Tool execution result
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,8 +56,8 @@ impl ToolRegistry {
         self.tools.insert(tool.name().to_string(), tool);
     }
 
-    pub fn get(&self, name: &str) -> Option<&Box<dyn Tool>> {
-        self.tools.get(name)
+    pub fn get(&self, name: &str) -> Option<&dyn Tool> {
+        self.tools.get(name).map(|b| b.as_ref())
     }
 
     pub fn list(&self) -> Vec<&str> {

@@ -1,8 +1,8 @@
 // Read tool - Read file contents with smart truncation
 use super::{Tool, ToolResult};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde_json::Value;
-use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
@@ -20,6 +20,7 @@ impl ReadTool {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_cwd(cwd: PathBuf) -> Self {
         Self { cwd }
     }
@@ -162,7 +163,9 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.txt");
 
-        tokio::fs::write(&file_path, "Hello\nWorld\n").await.unwrap();
+        tokio::fs::write(&file_path, "Hello\nWorld\n")
+            .await
+            .unwrap();
 
         let tool = ReadTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({
@@ -194,7 +197,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.txt");
 
-        let content = (1..=10).map(|i| format!("Line {}", i)).collect::<Vec<_>>().join("\n");
+        let content = (1..=10)
+            .map(|i| format!("Line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
         tokio::fs::write(&file_path, content).await.unwrap();
 
         let tool = ReadTool::with_cwd(temp_dir.path().to_path_buf());

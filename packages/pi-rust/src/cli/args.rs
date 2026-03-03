@@ -40,4 +40,3 @@ pub enum Commands {
         id: String,
     },
 }
-

@@ -1,12 +1,12 @@
 // Bash tool - Execute shell commands with output streaming
 use super::{Tool, ToolResult};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde_json::Value;
-use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::process::Stdio;
-use tokio::process::Command;
 use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command;
 
 const DEFAULT_MAX_OUTPUT: usize = 200 * 1024; // 200KB
 
@@ -21,6 +21,7 @@ impl BashTool {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_cwd(cwd: PathBuf) -> Self {
         Self { cwd }
     }
@@ -110,45 +111,42 @@ impl Tool for BashTool {
 
         // Collect output with timeout
         let result = if let Some(secs) = timeout_secs {
-            tokio::time::timeout(
-                std::time::Duration::from_secs(secs),
-                async {
-                    // Read both stdout and stderr concurrently
-                    loop {
-                        tokio::select! {
-                            line = stdout_reader.next_line() => {
-                                match line {
-                                    Ok(Some(line)) => {
-                                        output.push_str(&line);
-                                        output.push('\n');
-                                        if output.len() > DEFAULT_MAX_OUTPUT {
-                                            truncated = true;
-                                            break;
-                                        }
+            tokio::time::timeout(std::time::Duration::from_secs(secs), async {
+                // Read both stdout and stderr concurrently
+                loop {
+                    tokio::select! {
+                        line = stdout_reader.next_line() => {
+                            match line {
+                                Ok(Some(line)) => {
+                                    output.push_str(&line);
+                                    output.push('\n');
+                                    if output.len() > DEFAULT_MAX_OUTPUT {
+                                        truncated = true;
+                                        break;
                                     }
-                                    Ok(None) => break,
-                                    Err(e) => return Err(e),
                                 }
+                                Ok(None) => break,
+                                Err(e) => return Err(e),
                             }
-                            line = stderr_reader.next_line() => {
-                                match line {
-                                    Ok(Some(line)) => {
-                                        output.push_str(&line);
-                                        output.push('\n');
-                                        if output.len() > DEFAULT_MAX_OUTPUT {
-                                            truncated = true;
-                                            break;
-                                        }
+                        }
+                        line = stderr_reader.next_line() => {
+                            match line {
+                                Ok(Some(line)) => {
+                                    output.push_str(&line);
+                                    output.push('\n');
+                                    if output.len() > DEFAULT_MAX_OUTPUT {
+                                        truncated = true;
+                                        break;
                                     }
-                                    Ok(None) => break,
-                                    Err(e) => return Err(e),
                                 }
+                                Ok(None) => break,
+                                Err(e) => return Err(e),
                             }
                         }
                     }
-                    Ok::<(), std::io::Error>(())
                 }
-            )
+                Ok::<(), std::io::Error>(())
+            })
             .await
         } else {
             // No timeout

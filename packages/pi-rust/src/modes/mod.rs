@@ -1,11 +1,11 @@
 // Modes module - Interactive, RPC, and Print modes
 
 pub mod interactive;
-pub mod rpc;
 pub mod print;
+pub mod rpc;
 
-use async_trait::async_trait;
 use anyhow::Result;
+use async_trait::async_trait;
 
 /// Trait for different execution modes
 #[async_trait]

@@ -1,18 +1,16 @@
+use anyhow::Result;
+use clap::Parser;
 use pi_coding_agent::{
+    cli::args::{Cli, Commands},
     core::{
-        persistence::SessionManager,
+        hooks::HookRegistry, messages::MessageContent, persistence::SessionManager,
         session::AgentSession,
-        messages::MessageContent,
-        hooks::HookRegistry,
     },
     tools::ToolRegistry,
-    cli::args::{Cli, Commands},
     VERSION,
 };
-use clap::Parser;
-use std::sync::Arc;
 use std::path::PathBuf;
-use anyhow::Result;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -63,7 +61,8 @@ async fn main() -> Result<()> {
                 session_manager.clone(),
                 tool_registry.clone(),
                 hook_registry.clone(),
-            ).await?;
+            )
+            .await?;
 
             let messages = session.get_messages();
             println!("Messages: {}", messages.len());
@@ -91,7 +90,9 @@ async fn main() -> Result<()> {
                 session_manager.clone(),
                 tool_registry.clone(),
                 hook_registry.clone(),
-            ).await {
+            )
+            .await
+            {
                 Ok(s) => {
                     println!("Loaded existing session: {}", session_id);
                     s
@@ -110,7 +111,9 @@ async fn main() -> Result<()> {
                 // For now, just echo back (no LLM integration yet)
                 let response = "Echo: I received your message! (LLM integration coming soon)";
                 println!("Assistant: {}", response);
-                session.add_assistant_message(MessageContent::Text(response.to_string())).await?;
+                session
+                    .add_assistant_message(MessageContent::Text(response.to_string()))
+                    .await?;
 
                 println!("\nSession saved to: {}", session.session_id());
             } else {

@@ -3,11 +3,9 @@
 // This is a simplified version of the TypeScript extension system,
 // designed to grow incrementally. Currently supports core lifecycle events.
 
-use super::events::AgentEvent;
-use super::messages::{Message, MessageContent};
 use crate::tools::ToolResult;
-use async_trait::async_trait;
 use anyhow::Result;
+use async_trait::async_trait;
 use std::sync::Arc;
 
 // ============================================================================
@@ -18,20 +16,13 @@ use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub enum HookEvent {
     /// Fired when a session starts
-    SessionStart {
-        session_id: String,
-    },
+    SessionStart { session_id: String },
 
     /// Fired when a user message is added
-    MessageStart {
-        message_id: String,
-        role: String,
-    },
+    MessageStart { message_id: String, role: String },
 
     /// Fired when a message ends
-    MessageEnd {
-        message_id: String,
-    },
+    MessageEnd { message_id: String },
 
     /// Fired before a tool executes
     ToolCall {
@@ -65,7 +56,6 @@ pub struct HookContext {
 
     /// Session ID
     pub session_id: String,
-
     // Future: Add more context as needed
     // - UI methods
     // - Model registry
@@ -98,9 +88,7 @@ pub struct HookRegistry {
 impl HookRegistry {
     /// Create a new hook registry
     pub fn new() -> Self {
-        Self {
-            hooks: Vec::new(),
-        }
+        Self { hooks: Vec::new() }
     }
 
     /// Register a hook
@@ -196,20 +184,26 @@ mod tests {
         };
 
         // Emit events (should not panic)
-        registry.emit(
-            HookEvent::SessionStart {
-                session_id: "test".to_string(),
-            },
-            &context,
-        ).await.unwrap();
+        registry
+            .emit(
+                HookEvent::SessionStart {
+                    session_id: "test".to_string(),
+                },
+                &context,
+            )
+            .await
+            .unwrap();
 
-        registry.emit(
-            HookEvent::MessageStart {
-                message_id: "msg1".to_string(),
-                role: "user".to_string(),
-            },
-            &context,
-        ).await.unwrap();
+        registry
+            .emit(
+                HookEvent::MessageStart {
+                    message_id: "msg1".to_string(),
+                    role: "user".to_string(),
+                },
+                &context,
+            )
+            .await
+            .unwrap();
     }
 
     // Test custom hook
@@ -243,9 +237,9 @@ mod tests {
             session_id: "test".to_string(),
         };
 
-        registry.emit(
-            HookEvent::AgentStart,
-            &context,
-        ).await.unwrap();
+        registry
+            .emit(HookEvent::AgentStart, &context)
+            .await
+            .unwrap();
     }
 }

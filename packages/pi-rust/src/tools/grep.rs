@@ -1,12 +1,12 @@
 // Grep tool - Pattern matching with .gitignore support
 use super::{Tool, ToolResult};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use anyhow::{Result, Context};
-use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::path::{Path, PathBuf};
 
 const MAX_LINE_LENGTH: usize = 500;
 const MAX_OUTPUT_BYTES: usize = 50 * 1024; // 50KB
@@ -48,6 +48,7 @@ impl GrepTool {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_cwd(cwd: PathBuf) -> Self {
         Self { cwd }
     }
@@ -109,8 +110,9 @@ impl GrepTool {
 
         // Set up walker with gitignore support
         let mut walker = WalkBuilder::new(&search_path);
-        walker.hidden(false) // Include hidden files
-            .git_ignore(true)  // Respect .gitignore
+        walker
+            .hidden(false) // Include hidden files
+            .git_ignore(true) // Respect .gitignore
             .git_exclude(true)
             .git_global(true);
 
@@ -160,12 +162,20 @@ impl GrepTool {
 
                     // Get context if requested
                     if input.context > 0 {
-                        if let Ok(context_lines) = self.get_context_lines(file_path, line_num, input.context).await {
+                        if let Ok(context_lines) = self
+                            .get_context_lines(file_path, line_num, input.context)
+                            .await
+                        {
                             for (ctx_line_num, ctx_line) in context_lines {
-                                let (truncated, was_truncated) = Self::truncate_line(&ctx_line, MAX_LINE_LENGTH);
+                                let (truncated, was_truncated) =
+                                    Self::truncate_line(&ctx_line, MAX_LINE_LENGTH);
                                 truncated_any_line |= was_truncated;
 
-                                let marker = if ctx_line_num == line_num + 1 { ":" } else { "-" };
+                                let marker = if ctx_line_num == line_num + 1 {
+                                    ":"
+                                } else {
+                                    "-"
+                                };
                                 let line_str = format!(
                                     "{}{}{} {}\n",
                                     file_path.display(),
@@ -186,12 +196,8 @@ impl GrepTool {
                         let (truncated, was_truncated) = Self::truncate_line(line, MAX_LINE_LENGTH);
                         truncated_any_line |= was_truncated;
 
-                        let line_str = format!(
-                            "{}:{} {}\n",
-                            file_path.display(),
-                            line_num + 1,
-                            truncated
-                        );
+                        let line_str =
+                            format!("{}:{} {}\n", file_path.display(), line_num + 1, truncated);
 
                         output_bytes += line_str.len();
                         if output_bytes > MAX_OUTPUT_BYTES {
@@ -285,8 +291,8 @@ impl Tool for GrepTool {
     }
 
     async fn execute(&self, input: Value) -> Result<ToolResult> {
-        let input: GrepInput = serde_json::from_value(input)
-            .context("Invalid input for grep tool")?;
+        let input: GrepInput =
+            serde_json::from_value(input).context("Invalid input for grep tool")?;
 
         match self.perform_grep(input).await {
             Ok(output) => Ok(ToolResult {
@@ -314,7 +320,9 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.txt");
 
-        fs::write(&test_file, "Hello world\nThis is a test\nHello Rust\n").await.unwrap();
+        fs::write(&test_file, "Hello world\nThis is a test\nHello Rust\n")
+            .await
+            .unwrap();
 
         let tool = GrepTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({
@@ -332,7 +340,9 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.txt");
 
-        fs::write(&test_file, "Hello world\nhello rust\n").await.unwrap();
+        fs::write(&test_file, "Hello world\nhello rust\n")
+            .await
+            .unwrap();
 
         let tool = GrepTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({
@@ -350,8 +360,12 @@ mod tests {
     async fn test_grep_with_glob() {
         let temp_dir = TempDir::new().unwrap();
 
-        fs::write(temp_dir.path().join("test.rs"), "fn main() {}").await.unwrap();
-        fs::write(temp_dir.path().join("test.txt"), "fn main() {}").await.unwrap();
+        fs::write(temp_dir.path().join("test.rs"), "fn main() {}")
+            .await
+            .unwrap();
+        fs::write(temp_dir.path().join("test.txt"), "fn main() {}")
+            .await
+            .unwrap();
 
         let tool = GrepTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({

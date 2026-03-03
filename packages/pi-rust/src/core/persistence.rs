@@ -1,7 +1,7 @@
 // Session persistence - JSONL format for TypeScript compatibility
-use super::messages::{SessionEntry};
+use super::messages::SessionEntry;
 use anyhow::{Context, Result};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
@@ -66,11 +66,12 @@ impl SessionManager {
             .append(true)
             .open(&path)
             .await
-            .with_context(|| format!("Failed to open session file for append: {}", path.display()))?;
+            .with_context(|| {
+                format!("Failed to open session file for append: {}", path.display())
+            })?;
 
         // Serialize entry to JSON and write with newline
-        let json = serde_json::to_string(entry)
-            .context("Failed to serialize session entry")?;
+        let json = serde_json::to_string(entry).context("Failed to serialize session entry")?;
 
         file.write_all(json.as_bytes()).await?;
         file.write_all(b"\n").await?;
@@ -137,7 +138,7 @@ impl SessionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::messages::{Message, MessageRole, MessageContent};
+    use crate::core::messages::{Message, MessageContent, MessageRole};
     use tempfile::TempDir;
 
     #[tokio::test]
@@ -224,8 +225,16 @@ mod tests {
         for i in 1..=5 {
             let msg = Message {
                 id: i.to_string(),
-                parent_id: if i > 1 { Some((i - 1).to_string()) } else { None },
-                role: if i % 2 == 1 { MessageRole::User } else { MessageRole::Assistant },
+                parent_id: if i > 1 {
+                    Some((i - 1).to_string())
+                } else {
+                    None
+                },
+                role: if i % 2 == 1 {
+                    MessageRole::User
+                } else {
+                    MessageRole::Assistant
+                },
                 content: MessageContent::Text(format!("Message {}", i)),
                 timestamp: Some(1234567890 + i as i64),
                 model: None,
