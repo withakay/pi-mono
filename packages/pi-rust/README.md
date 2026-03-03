@@ -4,9 +4,7 @@ A Rust port of the pi coding agent, maintaining the same UX and logic structure 
 
 ## Status
 
-🚧 **Work in Progress** - Early development phase
-
-Current focus: Core domain models and tool system
+🚧 **Work in Progress** — Core agent loop and tools are complete. LLM integration is the next milestone.
 
 ## Goals
 
@@ -22,10 +20,9 @@ Current focus: Core domain models and tool system
 - Same keybindings and commands
 - Same session format (JSONL)
 - Same tool behavior (read, write, edit, bash, grep, find, ls)
-- Same core agent loop and logic
 
 ### Differences
-- Configuration in TOML instead of JSON (~/.pi/rust-agent/)
+- Configuration in TOML instead of JSON (`~/.pi/rust-agent/`)
 - Simplified hook system (no dynamic TypeScript extensions initially)
 - ratatui-based TUI instead of custom Ink-like framework
 - Faster startup (compiled binary, no Node.js runtime)
@@ -47,27 +44,30 @@ cargo build --release
 ## Running
 
 ```bash
-# From source
-cargo run
+# Interactive REPL (stdin/stdout)
+cargo run -- --session mysession
 
-# From binary
-./target/release/pi
+# Send a single message (print mode CLI)
+cargo run -- --session mysession "Hello"
+
+# Manage sessions
+cargo run -- sessions          # list
+cargo run -- new mysession     # create
+cargo run -- info mysession    # details
+cargo run -- delete mysession  # delete
 ```
 
 ## Development
 
 ### Prerequisites
 - Rust 1.75+ (uses 2021 edition features)
-- API key (Anthropic initially)
+- API key (Anthropic, once LLM integration lands)
 
 ### Testing
 
 ```bash
 # Run all tests
 cargo test
-
-# Run specific module tests
-cargo test --test session_tests
 
 # Run with logging
 RUST_LOG=debug cargo test
@@ -82,11 +82,36 @@ src/
 ├── main.rs           # CLI entry point
 ├── lib.rs            # Library exports
 ├── core/             # Core agent logic
+│   ├── messages.rs   # Message types & session entries
+│   ├── events.rs     # Event bus (tokio broadcast)
+│   ├── settings.rs   # TOML settings management
+│   ├── persistence.rs# JSONL session storage
+│   ├── session.rs    # Agent session state machine
+│   ├── hooks.rs      # Hook system
+│   └── compaction.rs # (stub) context compaction
 ├── tools/            # Built-in tools
-├── modes/            # Interactive, RPC, Print modes
-├── ui/               # TUI components
-├── cli/              # CLI argument parsing
+│   ├── bash.rs       # Shell command execution
+│   ├── read.rs       # File reading with pagination
+│   ├── write.rs      # File writing
+│   ├── edit.rs       # In-place text replacement + diff
+│   ├── grep.rs       # Regex search respecting .gitignore
+│   ├── find.rs       # Glob file/dir discovery
+│   └── ls.rs         # Directory listing
+├── modes/            # Execution modes
+│   ├── interactive.rs# REPL over stdin/stdout
+│   ├── print.rs      # Single-shot query
+│   └── rpc.rs        # JSON-lines stdin/stdout protocol
+├── ui/               # ratatui TUI components
+│   ├── app.rs        # Full TUI event loop
+│   ├── editor.rs     # Multi-line input widget
+│   ├── messages.rs   # Scrollable message history
+│   ├── footer.rs     # Status bar
+│   ├── theme.rs      # Color palettes
+│   └── keybindings.rs# Configurable key mappings
 └── utils/            # Shared utilities
+    ├── llm.rs        # (stub) LLM client types
+    ├── paths.rs      # Path helpers
+    └── truncate.rs   # Output truncation helpers
 ```
 
 ## Roadmap
@@ -95,31 +120,41 @@ src/
   - [x] Cargo workspace setup
   - [x] Architecture documentation
   - [x] Module structure
-- [ ] Phase 2: Core Domain Models
-  - [ ] Message types
-  - [ ] Event system
-  - [ ] Settings management
-- [ ] Phase 3: Tool System
-  - [ ] Bash executor
-  - [ ] File tools (read, write, edit)
-  - [ ] Search tools (grep, find, ls)
-- [ ] Phase 4: Agent Session Core
-  - [ ] State machine
-  - [ ] Session persistence
+- [x] Phase 2: Core Domain Models
+  - [x] Message types
+  - [x] Event system
+  - [x] Settings management
+- [x] Phase 3: Tool System
+  - [x] Bash executor
+  - [x] File tools (read, write, edit)
+  - [x] Search tools (grep, find, ls)
+- [x] Phase 4: Agent Session Core
+  - [x] State machine
+  - [x] Session persistence
+- [x] Phase 5: CLI
+  - [x] Argument parsing
+  - [x] Session management commands
+- [x] Phase 6: Hook System
+  - [x] Event dispatch
+  - [x] Hook trait & registry
+- [x] Phase 7: Additional Modes
+  - [x] Print mode
+  - [x] RPC mode
+  - [x] Interactive REPL mode
+- [x] Phase 8: UI Components
+  - [x] Editor widget
+  - [x] Messages panel
+  - [x] Footer / status bar
+  - [x] Theme system
+  - [x] Keybinding system
+  - [x] App event loop
+- [ ] Phase 9: LLM API Integration
+  - [ ] Anthropic API client
+  - [ ] SSE streaming
+  - [ ] Token counting & context management
+- [ ] Phase 10: Advanced Features
   - [ ] Compaction logic
-- [ ] Phase 5: Hook System
-  - [ ] Event dispatch
-  - [ ] Hook trait
-- [ ] Phase 6: Interactive TUI
-  - [ ] Editor
-  - [ ] Message display
-  - [ ] Footer/status
-- [ ] Phase 7: Additional Modes
-  - [ ] Print mode
-  - [ ] RPC mode
-- [ ] Phase 8: Integration & Polish
-  - [ ] LLM API integration
-  - [ ] Theme support
+  - [ ] Session branching
   - [ ] End-to-end testing
 
 ## Contributing

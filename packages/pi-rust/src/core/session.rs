@@ -95,8 +95,10 @@ impl AgentSession {
 
     /// Add a user message to the session
     pub async fn add_user_message(&mut self, content: String) -> Result<String> {
-        let message = Message::user(content)
-            .with_parent(self.current_head.clone().unwrap_or_default());
+        let mut message = Message::user(content);
+        if let Some(head) = &self.current_head {
+            message = message.with_parent(head.clone());
+        }
 
         let message_id = message.id.clone();
         let entry = SessionEntry::Message(message);
@@ -149,8 +151,10 @@ impl AgentSession {
 
     /// Add an assistant message to the session
     pub async fn add_assistant_message(&mut self, content: MessageContent) -> Result<String> {
-        let message = Message::assistant(content)
-            .with_parent(self.current_head.clone().unwrap_or_default());
+        let mut message = Message::assistant(content);
+        if let Some(head) = &self.current_head {
+            message = message.with_parent(head.clone());
+        }
 
         let message_id = message.id.clone();
         let entry = SessionEntry::Message(message);
