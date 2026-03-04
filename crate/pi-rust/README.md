@@ -1,6 +1,6 @@
-# Pi Coding Agent - Rust Port
+# Pi Coding Agent (Rust)
 
-A Rust port of the pi coding agent, maintaining the same UX and logic structure while leveraging Rust's performance and safety.
+Rust implementation of the pi coding agent, maintaining the same UX and logic structure while leveraging Rust's performance and safety.
 
 ## Status
 
@@ -10,25 +10,25 @@ Current focus: Core domain models and tool system
 
 ## Goals
 
-- **Similar UX**: Keep UI, keybindings, and logic structure as close as possible to TypeScript version
+- **Similar UX**: Keep UI, keybindings, and logic structure consistent across implementations
 - **Performance**: Faster startup and execution leveraging Rust
 - **Safety**: Type-safe architecture preventing common bugs
-- **Compatibility**: Read TypeScript session files (same JSONL format)
+- **Compatibility**: Read and write the same JSONL session format
 
-## What's Different from TypeScript Version
+## Key Characteristics
 
-### Similarities
+### Core behavior
 - Same UI layout (editor, messages, footer)
 - Same keybindings and commands
 - Same session format (JSONL)
 - Same tool behavior (read, write, edit, bash, grep, find, ls)
 - Same core agent loop and logic
 
-### Differences
-- Configuration in TOML instead of JSON (~/.pi/rust-agent/)
-- Simplified hook system (no dynamic TypeScript extensions initially)
+### Runtime and architecture
+- Configuration in TOML (~/.pi/rust-agent/)
+- Simplified hook system (no dynamic runtime extensions initially)
 - ratatui-based TUI instead of custom Ink-like framework
-- Faster startup (compiled binary, no Node.js runtime)
+- Faster startup (compiled binary)
 - Lower memory usage
 
 ### Not Included Initially
@@ -124,9 +124,9 @@ src/
 
 ## Contributing
 
-This is a port of the TypeScript pi coding agent. Contributions should:
-- Maintain compatibility with TypeScript session format
-- Keep UX similar to TypeScript version
+Contributions should:
+- Maintain compatibility with the JSONL session format
+- Keep UX consistent with the project conventions
 - Follow Rust best practices
 - Include tests for new functionality
 
@@ -136,5 +136,4 @@ MIT
 
 ## See Also
 
-- [Pi Coding Agent (TypeScript)](../coding-agent/) - Original implementation
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Detailed architecture documentation

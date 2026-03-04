@@ -4,11 +4,11 @@ on:
   push:
     branches: [main]
     paths:
-      - 'packages/pi-rust/**'
+      - 'crate/pi-rust/**'
   pull_request:
     branches: [main]
     paths:
-      - 'packages/pi-rust/**'
+      - 'crate/pi-rust/**'
 
 concurrency:
   group: rust-ci-${{ github.ref }}
@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: packages/pi-rust
+        working-directory: crate/pi-rust
 
     steps:
       - name: Checkout
@@ -39,8 +39,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/pi-rust/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/pi-rust/Cargo.lock') }}
+            crate/pi-rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('crate/pi-rust/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 

@@ -5,8 +5,8 @@
 ### Phase 1: Foundation & Setup ✅
 Successfully created the foundation for the Rust port:
 - **Cargo workspace** configured with all necessary dependencies (tokio, ratatui, serde, etc.)
-- **ARCHITECTURE.md** documenting design decisions and differences from TypeScript
-- **Module structure** mirroring TypeScript organization (core/, tools/, modes/, ui/, etc.)
+- **ARCHITECTURE.md** documenting design decisions and module boundaries
+- **Module structure** organized into core/, tools/, modes/, ui/, etc.
 - **Message types** with full serialization support
 - **Tool trait** and ToolRegistry framework
 - Project compiles and runs
@@ -17,7 +17,7 @@ Implemented core type-safe domain models:
   - AgentEvent enum with 12+ event types
   - EventBus with Arc-based efficient distribution
   - Multiple subscriber support
-- **Settings System** using TOML (vs JSON in TypeScript)
+- **Settings System** using TOML
   - Full Settings struct with all configuration options
   - CompactionSettings, RetrySettings, BranchSummarySettings
   - SettingsManager with global/project merge logic
@@ -44,7 +44,7 @@ Fully implemented core file and execution tools:
 
 ### Phase 4: Session Management ✅
 Implemented complete session persistence and state machine:
-- **SessionManager** - JSONL persistence (TypeScript compatible)
+- **SessionManager** - JSONL persistence
   - create_session, load_session, delete_session, list_sessions
   - append_entry for efficient incremental writes
   - Stores in ~/.pi/rust-agent/sessions/
@@ -54,7 +54,7 @@ Implemented complete session persistence and state machine:
   - Conversation history retrieval
   - Session load/save integration
 - **Session Format** - JSON Lines (one entry per line)
-  - Compatible with TypeScript version
+  - Stable, line-oriented JSON schema
   - Example: `{"type":"message","id":"...","parent_id":"...","role":"user","content":"...","timestamp":...}`
 - **Test Coverage**: All 27 tests passing
 
@@ -180,14 +180,14 @@ Rust's type system prevents many classes of bugs:
 - Tool execution is async-safe
 
 ### Performance
-Expected improvements over TypeScript:
-- Faster startup (compiled binary vs Node.js)
+Expected performance improvements:
+- Faster startup (compiled binary)
 - Lower memory usage
 - Efficient concurrent I/O with tokio
 - Zero-copy event distribution with Arc
 
 ### Compatibility
-- Can read/write TypeScript session files (same JSONL format)
+- Can read/write JSONL session files
 - Settings in TOML format (~/.pi/rust-agent/)
 - Same tool behavior and UX
 - Cross-platform (Windows/macOS/Linux)
