@@ -47,11 +47,10 @@ pub async fn run_print_mode(
             let response = format!("Echo: {}", message);
             println!("{}", response);
             session.add_user_message(message).await?;
-            session
-                .add_assistant_message(MessageContent::Text(response))
-                .await?;
+            session.add_assistant_message(MessageContent::Text(response)).await?;
         }
     }
 
     Ok(())
 }
+

@@ -97,7 +97,8 @@ async fn poll_for_github_token(
     interval_secs: u64,
     expires_in: u64,
 ) -> Result<String> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(expires_in);
+    let deadline =
+        std::time::Instant::now() + std::time::Duration::from_secs(expires_in);
     let mut interval = std::time::Duration::from_secs(interval_secs.max(1));
 
     loop {

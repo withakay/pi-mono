@@ -1,12 +1,12 @@
 // Find tool - File discovery with glob patterns
 use super::{Tool, ToolResult};
-use anyhow::{Context, Result};
 use async_trait::async_trait;
-use globset::Glob;
-use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use anyhow::{Result, Context};
 use std::path::{Path, PathBuf};
+use ignore::WalkBuilder;
+use globset::Glob;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct FindInput {
@@ -32,7 +32,6 @@ impl FindTool {
         }
     }
 
-    #[allow(dead_code)]
     pub fn with_cwd(cwd: PathBuf) -> Self {
         Self { cwd }
     }
@@ -66,12 +65,8 @@ impl FindTool {
 
             // Check file type filter
             let matches_type = match input.file_type.as_deref() {
-                Some("f") | Some("file") => {
-                    entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)
-                }
-                Some("d") | Some("dir") | Some("directory") => {
-                    entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
-                }
+                Some("f") | Some("file") => entry.file_type().map(|ft| ft.is_file()).unwrap_or(false),
+                Some("d") | Some("dir") | Some("directory") => entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false),
                 _ => true, // No filter or invalid filter = include all
             };
 
@@ -82,7 +77,8 @@ impl FindTool {
             // Check if path matches glob
             if glob.is_match(path) {
                 // Make path relative to search_path for cleaner output
-                let display_path = path.strip_prefix(&search_path).unwrap_or(path);
+                let display_path = path.strip_prefix(&search_path)
+                    .unwrap_or(path);
                 results.push(display_path.display().to_string());
             }
         }
@@ -128,8 +124,8 @@ impl Tool for FindTool {
     }
 
     async fn execute(&self, input: Value) -> Result<ToolResult> {
-        let input: FindInput =
-            serde_json::from_value(input).context("Invalid input for find tool")?;
+        let input: FindInput = serde_json::from_value(input)
+            .context("Invalid input for find tool")?;
 
         match self.perform_find(input).await {
             Ok(output) => Ok(ToolResult {
@@ -156,15 +152,9 @@ mod tests {
     async fn test_find_by_extension() {
         let temp_dir = TempDir::new().unwrap();
 
-        fs::write(temp_dir.path().join("test.rs"), "fn main() {}")
-            .await
-            .unwrap();
-        fs::write(temp_dir.path().join("test.txt"), "text")
-            .await
-            .unwrap();
-        fs::write(temp_dir.path().join("foo.rs"), "fn foo() {}")
-            .await
-            .unwrap();
+        fs::write(temp_dir.path().join("test.rs"), "fn main() {}").await.unwrap();
+        fs::write(temp_dir.path().join("test.txt"), "text").await.unwrap();
+        fs::write(temp_dir.path().join("foo.rs"), "fn foo() {}").await.unwrap();
 
         let tool = FindTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({
@@ -184,9 +174,7 @@ mod tests {
         let subdir = temp_dir.path().join("subdir");
         fs::create_dir(&subdir).await.unwrap();
 
-        fs::write(temp_dir.path().join("root.txt"), "text")
-            .await
-            .unwrap();
+        fs::write(temp_dir.path().join("root.txt"), "text").await.unwrap();
         fs::write(subdir.join("nested.txt"), "text").await.unwrap();
 
         let tool = FindTool::with_cwd(temp_dir.path().to_path_buf());
@@ -205,9 +193,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let subdir = temp_dir.path().join("testdir");
         fs::create_dir(&subdir).await.unwrap();
-        fs::write(temp_dir.path().join("testfile"), "text")
-            .await
-            .unwrap();
+        fs::write(temp_dir.path().join("testfile"), "text").await.unwrap();
 
         let tool = FindTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({
@@ -234,9 +220,7 @@ mod tests {
     #[tokio::test]
     async fn test_find_no_matches() {
         let temp_dir = TempDir::new().unwrap();
-        fs::write(temp_dir.path().join("file.txt"), "text")
-            .await
-            .unwrap();
+        fs::write(temp_dir.path().join("file.txt"), "text").await.unwrap();
 
         let tool = FindTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({
@@ -253,9 +237,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let subdir = temp_dir.path().join("mydir");
         fs::create_dir(&subdir).await.unwrap();
-        fs::write(temp_dir.path().join("myfile"), "text")
-            .await
-            .unwrap();
+        fs::write(temp_dir.path().join("myfile"), "text").await.unwrap();
 
         let tool = FindTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({
@@ -270,9 +252,7 @@ mod tests {
     #[tokio::test]
     async fn test_find_absolute_path() {
         let temp_dir = TempDir::new().unwrap();
-        fs::write(temp_dir.path().join("abs.txt"), "text")
-            .await
-            .unwrap();
+        fs::write(temp_dir.path().join("abs.txt"), "text").await.unwrap();
 
         let tool = FindTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({

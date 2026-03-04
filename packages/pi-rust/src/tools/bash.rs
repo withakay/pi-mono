@@ -1,12 +1,12 @@
 // Bash tool - Execute shell commands with output streaming
 use super::{Tool, ToolResult};
-use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde_json::Value;
+use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
+use tokio::io::{AsyncBufReadExt, BufReader};
 
 const DEFAULT_MAX_OUTPUT: usize = 200 * 1024; // 200KB
 
@@ -21,7 +21,6 @@ impl BashTool {
         }
     }
 
-    #[allow(dead_code)]
     pub fn with_cwd(cwd: PathBuf) -> Self {
         Self { cwd }
     }
@@ -159,22 +158,11 @@ impl Tool for BashTool {
         let result = if let Some(secs) = timeout_secs {
             tokio::time::timeout(
                 std::time::Duration::from_secs(secs),
-                collect_process_output(
-                    &mut stdout_reader,
-                    &mut stderr_reader,
-                    &mut output,
-                    &mut truncated,
-                ),
+                collect_process_output(&mut stdout_reader, &mut stderr_reader, &mut output, &mut truncated),
             )
             .await
         } else {
-            Ok(collect_process_output(
-                &mut stdout_reader,
-                &mut stderr_reader,
-                &mut output,
-                &mut truncated,
-            )
-            .await)
+            Ok(collect_process_output(&mut stdout_reader, &mut stderr_reader, &mut output, &mut truncated).await)
         };
 
         // Handle timeout or other errors
@@ -323,9 +311,7 @@ mod tests {
         let result = tool.execute(input).await.unwrap();
         assert!(result.success);
         // Both stdout and stderr should be captured
-        assert!(
-            result.output.contains("stdout message") || result.output.contains("stderr message")
-        );
+        assert!(result.output.contains("stdout message") || result.output.contains("stderr message"));
     }
 
     #[test]
