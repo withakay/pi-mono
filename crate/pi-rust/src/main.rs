@@ -1,24 +1,20 @@
+use clap::Parser;
 use pi_coding_agent::{
-    core::{
-        persistence::SessionManager,
-        session::AgentSession,
-        hooks::HookRegistry,
-    },
-    tools::ToolRegistry,
-    modes::print::run_print_mode,
+    cli::args::{AuthCommands, Cli, Commands},
+    core::{hooks::HookRegistry, persistence::SessionManager, session::AgentSession},
     modes::interactive::run_interactive_mode,
+    modes::print::run_print_mode,
     modes::rpc::run_rpc_mode,
-    cli::args::{Cli, Commands, AuthCommands},
+    tools::ToolRegistry,
     VERSION,
 };
-use clap::Parser;
 use std::sync::Arc;
 
 const PROVIDER_GITHUB_COPILOT: &str = "github-copilot";
 const PROVIDER_OPENAI_CODEX: &str = "openai-codex";
 const PROVIDER_OPENROUTER: &str = "openrouter";
-use std::path::PathBuf;
 use anyhow::{anyhow, Result};
+use std::path::PathBuf;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -73,7 +69,8 @@ async fn main() -> Result<()> {
                 session_manager.clone(),
                 tool_registry.clone(),
                 hook_registry.clone(),
-            ).await?;
+            )
+            .await?;
 
             let messages = session.get_messages();
             println!("Messages: {}", messages.len());
@@ -111,7 +108,8 @@ async fn main() -> Result<()> {
                 .await?;
             } else {
                 // No message: launch interactive TUI mode
-                run_interactive_mode(cli.session, session_manager, tool_registry, hook_registry).await?;
+                run_interactive_mode(cli.session, session_manager, tool_registry, hook_registry)
+                    .await?;
             }
         }
     }
@@ -152,7 +150,10 @@ async fn handle_auth_command(action: AuthCommands) -> Result<()> {
         }
 
         AuthCommands::Login { provider } => {
-            eprintln!("Unknown provider: {}. Supported: github-copilot, openai-codex, openrouter", provider);
+            eprintln!(
+                "Unknown provider: {}. Supported: github-copilot, openai-codex, openrouter",
+                provider
+            );
         }
 
         AuthCommands::Status => {
@@ -160,7 +161,10 @@ async fn handle_auth_command(action: AuthCommands) -> Result<()> {
             println!("  (checking auth.json at ~/.pi/agent/auth.json)\n");
 
             // Check env vars
-            for (provider, env_var) in [("anthropic", "ANTHROPIC_API_KEY"), ("openrouter", "OPENROUTER_API_KEY")] {
+            for (provider, env_var) in [
+                ("anthropic", "ANTHROPIC_API_KEY"),
+                ("openrouter", "OPENROUTER_API_KEY"),
+            ] {
                 if std::env::var(env_var).is_ok() {
                     println!("  {} - API key ({})", provider, env_var);
                 }
@@ -168,7 +172,10 @@ async fn handle_auth_command(action: AuthCommands) -> Result<()> {
 
             // Check auth.json
             let auth = pi_coding_agent::utils::auth::load_auth();
-            if auth.is_empty() && std::env::var("ANTHROPIC_API_KEY").is_err() && std::env::var("OPENROUTER_API_KEY").is_err() {
+            if auth.is_empty()
+                && std::env::var("ANTHROPIC_API_KEY").is_err()
+                && std::env::var("OPENROUTER_API_KEY").is_err()
+            {
                 println!("  (no credentials found)");
             }
             for (provider, cred) in &auth {
@@ -178,7 +185,11 @@ async fn handle_auth_command(action: AuthCommands) -> Result<()> {
                     }
                     pi_coding_agent::utils::auth::StoredCredential::OAuth { expires, .. } => {
                         let now_ms = chrono::Utc::now().timestamp_millis();
-                        let status = if *expires > now_ms { "valid" } else { "expired" };
+                        let status = if *expires > now_ms {
+                            "valid"
+                        } else {
+                            "expired"
+                        };
                         println!("  {} - OAuth token ({})", provider, status);
                     }
                 }
@@ -195,8 +206,8 @@ async fn handle_auth_command(action: AuthCommands) -> Result<()> {
 }
 
 async fn run_github_copilot_login() -> Result<()> {
-    use pi_coding_agent::utils::oauth::login_github_copilot;
     use pi_coding_agent::utils::auth::store_oauth;
+    use pi_coding_agent::utils::oauth::login_github_copilot;
 
     let (access, refresh, expires_ms) = login_github_copilot().await?;
     store_oauth("github-copilot", access, refresh, expires_ms)?;
@@ -222,7 +233,9 @@ async fn run_openai_codex_login() -> Result<()> {
             .status()
             .await?
     } else {
-        eprintln!("Note: Using npx to download @mariozechner/pi-ai. This requires internet access.");
+        eprintln!(
+            "Note: Using npx to download @mariozechner/pi-ai. This requires internet access."
+        );
         tokio::process::Command::new("npx")
             .arg("--yes")
             .arg("@mariozechner/pi-ai")

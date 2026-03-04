@@ -1,12 +1,12 @@
 // Edit tool - String-based file editing with fuzzy matching and diff generation
 use super::{Tool, ToolResult};
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use anyhow::{Result, Context, bail};
+use similar::{ChangeTag, TextDiff};
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use similar::{ChangeTag, TextDiff};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct EditInput {
@@ -69,7 +69,13 @@ impl EditTool {
                     .replace(['\u{2018}', '\u{2019}'], "'")
                     .replace(['\u{201C}', '\u{201D}'], "\"")
                     // Various dashes to ASCII hyphen
-                    .replace(['\u{2010}', '\u{2011}', '\u{2012}', '\u{2013}', '\u{2014}', '\u{2015}', '\u{2212}'], "-")
+                    .replace(
+                        [
+                            '\u{2010}', '\u{2011}', '\u{2012}', '\u{2013}', '\u{2014}', '\u{2015}',
+                            '\u{2212}',
+                        ],
+                        "-",
+                    )
                     // Unicode spaces to regular space
                     .replace(['\u{00A0}', '\u{2007}', '\u{202F}'], " ")
             })
@@ -96,7 +102,9 @@ impl EditTool {
 
             // Map back to original content
             let original_pos = content.char_indices().nth(chars_before)?.0;
-            let end_pos = content.char_indices().nth(chars_before + match_len)
+            let end_pos = content
+                .char_indices()
+                .nth(chars_before + match_len)
                 .map(|(i, _)| i)
                 .unwrap_or(content.len());
 
@@ -171,8 +179,11 @@ impl EditTool {
         let normalized_new_text = Self::normalize_to_lf(&input.new_text);
 
         // Find and replace
-        let (pos, len, use_content) = Self::fuzzy_find_text(&normalized_content, &normalized_old_text)
-            .context(format!("Could not find old text in file: {}", path.display()))?;
+        let (pos, len, use_content) =
+            Self::fuzzy_find_text(&normalized_content, &normalized_old_text).context(format!(
+                "Could not find old text in file: {}",
+                path.display()
+            ))?;
 
         // Check if text appears only once
         let rest_content = &use_content[pos + len..];
@@ -256,8 +267,8 @@ impl Tool for EditTool {
     }
 
     async fn execute(&self, input: Value) -> Result<ToolResult> {
-        let input: EditInput = serde_json::from_value(input)
-            .context("Invalid input for edit tool")?;
+        let input: EditInput =
+            serde_json::from_value(input).context("Invalid input for edit tool")?;
 
         match self.perform_edit(input).await {
             Ok(output) => Ok(ToolResult {
@@ -284,7 +295,9 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.txt");
 
-        fs::write(&test_file, "Hello world\nThis is a test\n").await.unwrap();
+        fs::write(&test_file, "Hello world\nThis is a test\n")
+            .await
+            .unwrap();
 
         let tool = EditTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({
@@ -306,7 +319,9 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.txt");
 
-        fs::write(&test_file, "Hello world\r\nThis is a test\r\n").await.unwrap();
+        fs::write(&test_file, "Hello world\r\nThis is a test\r\n")
+            .await
+            .unwrap();
 
         let tool = EditTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({
@@ -328,7 +343,9 @@ mod tests {
         let test_file = temp_dir.path().join("test.txt");
 
         // File has smart quotes (using unicode escapes)
-        fs::write(&test_file, "Hello \u{201C}world\u{201D}\n").await.unwrap();
+        fs::write(&test_file, "Hello \u{201C}world\u{201D}\n")
+            .await
+            .unwrap();
 
         let tool = EditTool::with_cwd(temp_dir.path().to_path_buf());
         // Search with ASCII quotes
@@ -412,7 +429,9 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("bom.txt");
         // Write file with BOM
-        fs::write(&test_file, "\u{feff}Hello world\nSecond line\n").await.unwrap();
+        fs::write(&test_file, "\u{feff}Hello world\nSecond line\n")
+            .await
+            .unwrap();
 
         let tool = EditTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({
@@ -471,11 +490,20 @@ mod tests {
         assert_eq!(EditTool::detect_line_ending("hello\nworld\n"), "\n");
 
         // Test normalize_to_lf
-        assert_eq!(EditTool::normalize_to_lf("hello\r\nworld\r\n"), "hello\nworld\n");
+        assert_eq!(
+            EditTool::normalize_to_lf("hello\r\nworld\r\n"),
+            "hello\nworld\n"
+        );
 
         // Test restore_line_endings
-        assert_eq!(EditTool::restore_line_endings("hello\nworld\n", "\r\n"), "hello\r\nworld\r\n");
-        assert_eq!(EditTool::restore_line_endings("hello\nworld\n", "\n"), "hello\nworld\n");
+        assert_eq!(
+            EditTool::restore_line_endings("hello\nworld\n", "\r\n"),
+            "hello\r\nworld\r\n"
+        );
+        assert_eq!(
+            EditTool::restore_line_endings("hello\nworld\n", "\n"),
+            "hello\nworld\n"
+        );
 
         // Test strip_bom
         assert_eq!(EditTool::strip_bom("\u{feff}hello"), "hello");
@@ -520,7 +548,7 @@ mod tests {
         let old = old_lines.join("\n");
 
         let mut new_lines = old_lines.clone();
-        new_lines[2] = "modified_line3".to_string();  // Change near start
+        new_lines[2] = "modified_line3".to_string(); // Change near start
         new_lines[48] = "modified_line49".to_string(); // Change near end
         let new = new_lines.join("\n");
 

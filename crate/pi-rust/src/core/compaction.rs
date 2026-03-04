@@ -15,25 +15,33 @@ pub fn estimate_message_tokens(msg: &Message) -> usize {
     match &msg.content {
         MessageContent::Text(t) => estimate_tokens(t) + 4,
         MessageContent::Blocks(blocks) => {
-            blocks.iter().map(|b| match b {
-                crate::core::messages::ContentBlock::Text { text } => estimate_tokens(text),
-                crate::core::messages::ContentBlock::ToolUse { input, name, .. } => {
-                    estimate_tokens(name) + estimate_tokens(&input.to_string())
-                }
-                crate::core::messages::ContentBlock::ToolResult { content, .. } => {
-                    estimate_tokens(content)
-                }
-                crate::core::messages::ContentBlock::Thinking { thinking } => {
-                    estimate_tokens(thinking)
-                }
-            }).sum::<usize>() + 4
+            blocks
+                .iter()
+                .map(|b| match b {
+                    crate::core::messages::ContentBlock::Text { text } => estimate_tokens(text),
+                    crate::core::messages::ContentBlock::ToolUse { input, name, .. } => {
+                        estimate_tokens(name) + estimate_tokens(&input.to_string())
+                    }
+                    crate::core::messages::ContentBlock::ToolResult { content, .. } => {
+                        estimate_tokens(content)
+                    }
+                    crate::core::messages::ContentBlock::Thinking { thinking } => {
+                        estimate_tokens(thinking)
+                    }
+                })
+                .sum::<usize>()
+                + 4
         }
     }
 }
 
 /// Check if messages exceed a token limit
 pub fn exceeds_limit(messages: &[&Message], limit: usize) -> bool {
-    messages.iter().map(|m| estimate_message_tokens(m)).sum::<usize>() > limit
+    messages
+        .iter()
+        .map(|m| estimate_message_tokens(m))
+        .sum::<usize>()
+        > limit
 }
 
 /// Compact messages by keeping system messages and recent context,
@@ -105,9 +113,9 @@ mod tests {
 
     #[test]
     fn test_compact_keeps_recent() {
-        let messages: Vec<Message> = (0..10).map(|i| {
-            Message::user(format!("message {}", i))
-        }).collect();
+        let messages: Vec<Message> = (0..10)
+            .map(|i| Message::user(format!("message {}", i)))
+            .collect();
 
         let (compacted, summary) = compact_messages(messages, 10, 3);
         assert_eq!(compacted.len(), 3);
@@ -116,9 +124,9 @@ mod tests {
 
     #[test]
     fn test_compact_no_change_when_within_limit() {
-        let messages: Vec<Message> = (0..3).map(|i| {
-            Message::user(format!("msg {}", i))
-        }).collect();
+        let messages: Vec<Message> = (0..3)
+            .map(|i| Message::user(format!("msg {}", i)))
+            .collect();
 
         let (compacted, summary) = compact_messages(messages.clone(), 100000, 5);
         assert_eq!(compacted.len(), messages.len());

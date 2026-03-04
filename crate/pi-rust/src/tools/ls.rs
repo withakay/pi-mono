@@ -1,9 +1,9 @@
 // Ls tool - Directory listing
 use super::{Tool, ToolResult};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use anyhow::{Result, Context};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
@@ -56,12 +56,14 @@ impl LsTool {
             if input.long {
                 let metadata = fs::metadata(&list_path).await?;
                 let size = metadata.len();
-                let name = list_path.file_name()
+                let name = list_path
+                    .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("?");
                 return Ok(format!("{:>12}  {}\n", size, name));
             } else {
-                let name = list_path.file_name()
+                let name = list_path
+                    .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("?");
                 return Ok(format!("{}\n", name));
@@ -130,8 +132,7 @@ impl Tool for LsTool {
     }
 
     async fn execute(&self, input: Value) -> Result<ToolResult> {
-        let input: LsInput = serde_json::from_value(input)
-            .context("Invalid input for ls tool")?;
+        let input: LsInput = serde_json::from_value(input).context("Invalid input for ls tool")?;
 
         match self.perform_ls(input).await {
             Ok(output) => Ok(ToolResult {
@@ -158,8 +159,12 @@ mod tests {
     async fn test_ls_directory() {
         let temp_dir = TempDir::new().unwrap();
 
-        fs::write(temp_dir.path().join("file1.txt"), "text").await.unwrap();
-        fs::write(temp_dir.path().join("file2.txt"), "text").await.unwrap();
+        fs::write(temp_dir.path().join("file1.txt"), "text")
+            .await
+            .unwrap();
+        fs::write(temp_dir.path().join("file2.txt"), "text")
+            .await
+            .unwrap();
 
         let tool = LsTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({});
@@ -174,8 +179,12 @@ mod tests {
     async fn test_ls_hidden_files() {
         let temp_dir = TempDir::new().unwrap();
 
-        fs::write(temp_dir.path().join("visible.txt"), "text").await.unwrap();
-        fs::write(temp_dir.path().join(".hidden.txt"), "text").await.unwrap();
+        fs::write(temp_dir.path().join("visible.txt"), "text")
+            .await
+            .unwrap();
+        fs::write(temp_dir.path().join(".hidden.txt"), "text")
+            .await
+            .unwrap();
 
         let tool = LsTool::with_cwd(temp_dir.path().to_path_buf());
 
@@ -198,7 +207,9 @@ mod tests {
     async fn test_ls_long_format() {
         let temp_dir = TempDir::new().unwrap();
 
-        fs::write(temp_dir.path().join("test.txt"), "hello world").await.unwrap();
+        fs::write(temp_dir.path().join("test.txt"), "hello world")
+            .await
+            .unwrap();
 
         let tool = LsTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({"long": true});
@@ -244,7 +255,9 @@ mod tests {
     #[tokio::test]
     async fn test_ls_file_path() {
         let temp_dir = TempDir::new().unwrap();
-        fs::write(temp_dir.path().join("single.txt"), "content").await.unwrap();
+        fs::write(temp_dir.path().join("single.txt"), "content")
+            .await
+            .unwrap();
 
         let tool = LsTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({"path": "single.txt"});
@@ -257,7 +270,9 @@ mod tests {
     #[tokio::test]
     async fn test_ls_file_long_format() {
         let temp_dir = TempDir::new().unwrap();
-        fs::write(temp_dir.path().join("single.txt"), "content").await.unwrap();
+        fs::write(temp_dir.path().join("single.txt"), "content")
+            .await
+            .unwrap();
 
         let tool = LsTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({"path": "single.txt", "long": true});
@@ -273,7 +288,9 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let subdir = temp_dir.path().join("subdir");
         fs::create_dir(&subdir).await.unwrap();
-        fs::write(temp_dir.path().join("file.txt"), "data").await.unwrap();
+        fs::write(temp_dir.path().join("file.txt"), "data")
+            .await
+            .unwrap();
 
         let tool = LsTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({"long": true});
@@ -288,7 +305,9 @@ mod tests {
     #[tokio::test]
     async fn test_ls_absolute_path() {
         let temp_dir = TempDir::new().unwrap();
-        fs::write(temp_dir.path().join("abs.txt"), "text").await.unwrap();
+        fs::write(temp_dir.path().join("abs.txt"), "text")
+            .await
+            .unwrap();
 
         let tool = LsTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({"path": temp_dir.path().to_str().unwrap()});

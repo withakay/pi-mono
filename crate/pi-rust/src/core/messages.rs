@@ -167,9 +167,10 @@ impl Message {
     /// Get all tool calls in this message
     pub fn tool_calls(&self) -> Vec<&ContentBlock> {
         match &self.content {
-            MessageContent::Blocks(blocks) => {
-                blocks.iter().filter(|b| matches!(b, ContentBlock::ToolUse { .. })).collect()
-            }
+            MessageContent::Blocks(blocks) => blocks
+                .iter()
+                .filter(|b| matches!(b, ContentBlock::ToolUse { .. }))
+                .collect(),
             _ => vec![],
         }
     }
@@ -310,11 +311,9 @@ mod tests {
 
     #[test]
     fn test_text_content_no_text_block() {
-        let blocks = vec![
-            ContentBlock::Thinking {
-                thinking: "thinking only".to_string(),
-            },
-        ];
+        let blocks = vec![ContentBlock::Thinking {
+            thinking: "thinking only".to_string(),
+        }];
         let msg = Message::assistant(MessageContent::Blocks(blocks));
         assert_eq!(msg.text_content(), None);
     }
@@ -372,7 +371,9 @@ mod tests {
     #[test]
     fn test_content_block_serialization() {
         let blocks = vec![
-            ContentBlock::Text { text: "hello".to_string() },
+            ContentBlock::Text {
+                text: "hello".to_string(),
+            },
             ContentBlock::ToolUse {
                 id: "t1".to_string(),
                 name: "read".to_string(),

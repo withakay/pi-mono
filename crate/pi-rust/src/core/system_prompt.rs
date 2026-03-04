@@ -44,7 +44,10 @@ mod tests {
         assert!(prompt.contains("Current date:"));
         // Verify the date format includes a 4-digit year
         let re = regex::Regex::new(r"\d{4}-\d{2}-\d{2}").unwrap();
-        assert!(re.is_match(&prompt), "Prompt should contain a date in YYYY-MM-DD format");
+        assert!(
+            re.is_match(&prompt),
+            "Prompt should contain a date in YYYY-MM-DD format"
+        );
     }
 
     #[test]

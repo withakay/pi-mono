@@ -83,16 +83,12 @@ pub async fn run_interactive_mode(
                             }
                             Err(e) => {
                                 app.finish_streaming();
-                                app.add_message(
-                                    "System".to_string(),
-                                    format!("Error: {}", e),
-                                );
+                                app.add_message("System".to_string(), format!("Error: {}", e));
                                 app.set_status("Error".to_string());
                             }
                         }
                     } else {
-                        let echo =
-                            format!("Echo: {} (no LLM provider configured)", message);
+                        let echo = format!("Echo: {} (no LLM provider configured)", message);
                         app.add_message("Assistant".to_string(), echo.clone());
                         session.add_user_message(message).await?;
                         session

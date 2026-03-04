@@ -66,4 +66,3 @@ pub enum Commands {
         action: AuthCommands,
     },
 }
-

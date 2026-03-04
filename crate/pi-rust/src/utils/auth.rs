@@ -8,7 +8,9 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum StoredCredential {
-    ApiKey { key: String },
+    ApiKey {
+        key: String,
+    },
     #[serde(rename = "oauth")]
     OAuth {
         access: String,
@@ -61,7 +63,9 @@ pub fn get_api_key(provider: &str) -> Option<String> {
     let auth = load_auth();
     match auth.get(provider)? {
         StoredCredential::ApiKey { key } => Some(key.clone()),
-        StoredCredential::OAuth { access, expires, .. } => {
+        StoredCredential::OAuth {
+            access, expires, ..
+        } => {
             let now_ms = chrono::Utc::now().timestamp_millis();
             if *expires > now_ms {
                 Some(access.clone())
@@ -148,7 +152,9 @@ mod tests {
         };
 
         match &valid {
-            StoredCredential::OAuth { expires, access, .. } => {
+            StoredCredential::OAuth {
+                expires, access, ..
+            } => {
                 assert!(*expires > now_ms, "Valid token should not be expired");
                 assert_eq!(access, "token123");
             }
@@ -172,7 +178,8 @@ mod tests {
             _ => panic!("Expected ApiKey"),
         }
 
-        let oauth_json = r#"{"type":"oauth","access":"acc","refresh":"ref","expires":9999999999999}"#;
+        let oauth_json =
+            r#"{"type":"oauth","access":"acc","refresh":"ref","expires":9999999999999}"#;
         let oauth_cred: StoredCredential = serde_json::from_str(oauth_json).unwrap();
         match oauth_cred {
             StoredCredential::OAuth {

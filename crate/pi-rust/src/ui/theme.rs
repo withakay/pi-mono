@@ -23,9 +23,13 @@ impl Theme {
         Self {
             user_message: Style::default().fg(Color::Cyan),
             assistant_message: Style::default().fg(Color::Green),
-            system_message: Style::default().fg(Color::Yellow).add_modifier(Modifier::ITALIC),
+            system_message: Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::ITALIC),
             editor_normal: Style::default().fg(Color::White),
-            editor_focused: Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            editor_focused: Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
             footer: Style::default().fg(Color::DarkGray),
             border: Style::default().fg(Color::DarkGray),
             tool_call: Style::default().fg(Color::Magenta),

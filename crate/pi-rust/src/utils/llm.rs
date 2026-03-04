@@ -7,8 +7,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::env;
 use tokio::sync::mpsc;
-use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
 
 /// Message for sending to the Anthropic API
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -293,14 +293,20 @@ impl AnthropicClient {
 
                                         match evt.event_type.as_str() {
                                             "message_start" => {
-                                                if let Ok(ms) = serde_json::from_value::<MessageStart>(evt.data) {
+                                                if let Ok(ms) =
+                                                    serde_json::from_value::<MessageStart>(evt.data)
+                                                {
                                                     if let Some(usage) = ms.message.usage {
                                                         input_tokens = usage.input_tokens;
                                                     }
                                                 }
                                             }
                                             "content_block_start" => {
-                                                if let Ok(cbs) = serde_json::from_value::<ContentBlockStart>(evt.data) {
+                                                if let Ok(cbs) =
+                                                    serde_json::from_value::<ContentBlockStart>(
+                                                        evt.data,
+                                                    )
+                                                {
                                                     if cbs.content_block.block_type == "tool_use" {
                                                         let chunk = StreamChunk::ToolUseStart {
                                                             id: cbs.content_block.id,
@@ -313,10 +319,21 @@ impl AnthropicClient {
                                                 }
                                             }
                                             "content_block_delta" => {
-                                                if let Ok(cbd) = serde_json::from_value::<ContentBlockDeltaEvent>(evt.data) {
-                                                    let chunk = match cbd.delta.delta_type.as_str() {
-                                                        "text_delta" => Some(StreamChunk::Text(cbd.delta.text)),
-                                                        "input_json_delta" => Some(StreamChunk::ToolUseDelta(cbd.delta.partial_json)),
+                                                if let Ok(cbd) = serde_json::from_value::<
+                                                    ContentBlockDeltaEvent,
+                                                >(
+                                                    evt.data
+                                                ) {
+                                                    let chunk = match cbd.delta.delta_type.as_str()
+                                                    {
+                                                        "text_delta" => {
+                                                            Some(StreamChunk::Text(cbd.delta.text))
+                                                        }
+                                                        "input_json_delta" => {
+                                                            Some(StreamChunk::ToolUseDelta(
+                                                                cbd.delta.partial_json,
+                                                            ))
+                                                        }
                                                         _ => None,
                                                     };
                                                     if let Some(c) = chunk {
@@ -329,12 +346,20 @@ impl AnthropicClient {
                                             "content_block_stop" => {
                                                 // Only emit ToolUseEnd — we track index via ToolUseStart/ToolUseDelta
                                                 // We send ToolUseEnd conservatively; the session loop tracks state
-                                                if tx.send(Ok(StreamChunk::ToolUseEnd)).await.is_err() {
+                                                if tx
+                                                    .send(Ok(StreamChunk::ToolUseEnd))
+                                                    .await
+                                                    .is_err()
+                                                {
                                                     break 'outer;
                                                 }
                                             }
                                             "message_delta" => {
-                                                if let Ok(mde) = serde_json::from_value::<MessageDeltaEvent>(evt.data) {
+                                                if let Ok(mde) =
+                                                    serde_json::from_value::<MessageDeltaEvent>(
+                                                        evt.data,
+                                                    )
+                                                {
                                                     stop_reason = mde.delta.stop_reason;
                                                     if let Some(usage) = mde.usage {
                                                         output_tokens = usage.output_tokens;
@@ -342,11 +367,13 @@ impl AnthropicClient {
                                                 }
                                             }
                                             "message_stop" => {
-                                                let _ = tx.send(Ok(StreamChunk::Done {
-                                                    stop_reason: stop_reason.clone(),
-                                                    input_tokens,
-                                                    output_tokens,
-                                                })).await;
+                                                let _ = tx
+                                                    .send(Ok(StreamChunk::Done {
+                                                        stop_reason: stop_reason.clone(),
+                                                        input_tokens,
+                                                        output_tokens,
+                                                    }))
+                                                    .await;
                                                 break 'outer;
                                             }
                                             _ => {}
@@ -372,7 +399,9 @@ impl AnthropicClient {
         model: Option<String>,
         max_tokens: u32,
     ) -> Result<StreamResponse> {
-        let mut stream = self.stream_message(messages, system, tools, model, max_tokens).await?;
+        let mut stream = self
+            .stream_message(messages, system, tools, model, max_tokens)
+            .await?;
 
         let mut response = StreamResponse::default();
         let mut current_tool: Option<(String, String, String)> = None; // (id, name, json)
@@ -399,7 +428,11 @@ impl AnthropicClient {
                         });
                     }
                 }
-                StreamChunk::Done { stop_reason, input_tokens, output_tokens } => {
+                StreamChunk::Done {
+                    stop_reason,
+                    input_tokens,
+                    output_tokens,
+                } => {
                     response.stop_reason = stop_reason;
                     response.input_tokens = input_tokens;
                     response.output_tokens = output_tokens;
@@ -427,9 +460,7 @@ impl OpenAICompatClient {
     pub fn openrouter_from_env() -> Result<Self> {
         let api_key = env::var("OPENROUTER_API_KEY").or_else(|_| {
             crate::utils::auth::get_api_key("openrouter").ok_or_else(|| {
-                anyhow!(
-                    "OPENROUTER_API_KEY not set and no openrouter credentials in auth.json"
-                )
+                anyhow!("OPENROUTER_API_KEY not set and no openrouter credentials in auth.json")
             })
         })?;
         Ok(Self::openrouter(api_key))
@@ -459,9 +490,7 @@ impl OpenAICompatClient {
             .or_else(|| env::var("COPILOT_GITHUB_TOKEN").ok())
             .or_else(|| env::var("GH_TOKEN").ok())
             .ok_or_else(|| {
-                anyhow!(
-                    "No GitHub Copilot token found. Run: pi auth login github-copilot"
-                )
+                anyhow!("No GitHub Copilot token found. Run: pi auth login github-copilot")
             })?;
         Ok(Self::github_copilot(api_key))
     }
@@ -623,9 +652,7 @@ impl OpenAICompatClient {
                         Some(p) => p,
                         None => break,
                     };
-                    let line = leftover[..newline_pos]
-                        .trim_end_matches('\r')
-                        .to_string();
+                    let line = leftover[..newline_pos].trim_end_matches('\r').to_string();
                     leftover = leftover[newline_pos + 1..].to_string();
 
                     if line.is_empty() {
@@ -671,8 +698,7 @@ impl OpenAICompatClient {
 
                                 if let Some(tc_array) = delta["tool_calls"].as_array() {
                                     for tc in tc_array {
-                                        let idx =
-                                            tc["index"].as_u64().unwrap_or(0) as usize;
+                                        let idx = tc["index"].as_u64().unwrap_or(0) as usize;
 
                                         if let Some(id) = tc["id"].as_str() {
                                             let name = tc["function"]["name"]
@@ -685,10 +711,8 @@ impl OpenAICompatClient {
                                                     name: name.clone(),
                                                 }))
                                                 .await;
-                                            tool_calls.insert(
-                                                idx,
-                                                (id.to_string(), name, String::new()),
-                                            );
+                                            tool_calls
+                                                .insert(idx, (id.to_string(), name, String::new()));
                                         }
 
                                         if let Some(args_delta) =
@@ -709,8 +733,7 @@ impl OpenAICompatClient {
                                 }
 
                                 if let Some(reason) = finish_reason {
-                                    let mut keys: Vec<usize> =
-                                        tool_calls.keys().cloned().collect();
+                                    let mut keys: Vec<usize> = tool_calls.keys().cloned().collect();
                                     keys.sort();
                                     for key in keys {
                                         tool_calls.remove(&key);
@@ -727,10 +750,8 @@ impl OpenAICompatClient {
                                     let _ = tx
                                         .send(Ok(StreamChunk::Done {
                                             stop_reason: Some(stop_reason.to_string()),
-                                            input_tokens: v["usage"]["prompt_tokens"]
-                                                .as_u64(),
-                                            output_tokens: v["usage"]["completion_tokens"]
-                                                .as_u64(),
+                                            input_tokens: v["usage"]["prompt_tokens"].as_u64(),
+                                            output_tokens: v["usage"]["completion_tokens"].as_u64(),
                                         }))
                                         .await;
                                 }

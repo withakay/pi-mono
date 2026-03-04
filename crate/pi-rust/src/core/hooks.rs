@@ -380,24 +380,64 @@ mod tests {
         };
 
         // Test all hook event variants
-        registry.emit(HookEvent::SessionStart { session_id: "s1".to_string() }, &context).await.unwrap();
-        registry.emit(HookEvent::MessageStart { message_id: "m1".to_string(), role: "user".to_string() }, &context).await.unwrap();
-        registry.emit(HookEvent::MessageEnd { message_id: "m1".to_string() }, &context).await.unwrap();
-        registry.emit(HookEvent::ToolCall {
-            tool_call_id: "tc1".to_string(),
-            tool_name: "bash".to_string(),
-            input: serde_json::json!({}),
-        }, &context).await.unwrap();
-        registry.emit(HookEvent::ToolResult {
-            tool_call_id: "tc1".to_string(),
-            tool_name: "bash".to_string(),
-            result: crate::tools::ToolResult {
-                success: true,
-                output: "ok".to_string(),
-                error: None,
-            },
-        }, &context).await.unwrap();
-        registry.emit(HookEvent::AgentStart, &context).await.unwrap();
+        registry
+            .emit(
+                HookEvent::SessionStart {
+                    session_id: "s1".to_string(),
+                },
+                &context,
+            )
+            .await
+            .unwrap();
+        registry
+            .emit(
+                HookEvent::MessageStart {
+                    message_id: "m1".to_string(),
+                    role: "user".to_string(),
+                },
+                &context,
+            )
+            .await
+            .unwrap();
+        registry
+            .emit(
+                HookEvent::MessageEnd {
+                    message_id: "m1".to_string(),
+                },
+                &context,
+            )
+            .await
+            .unwrap();
+        registry
+            .emit(
+                HookEvent::ToolCall {
+                    tool_call_id: "tc1".to_string(),
+                    tool_name: "bash".to_string(),
+                    input: serde_json::json!({}),
+                },
+                &context,
+            )
+            .await
+            .unwrap();
+        registry
+            .emit(
+                HookEvent::ToolResult {
+                    tool_call_id: "tc1".to_string(),
+                    tool_name: "bash".to_string(),
+                    result: crate::tools::ToolResult {
+                        success: true,
+                        output: "ok".to_string(),
+                        error: None,
+                    },
+                },
+                &context,
+            )
+            .await
+            .unwrap();
+        registry
+            .emit(HookEvent::AgentStart, &context)
+            .await
+            .unwrap();
         registry.emit(HookEvent::AgentEnd, &context).await.unwrap();
     }
 
@@ -454,24 +494,64 @@ mod tests {
         };
 
         // Test all hook event variants
-        registry.emit(HookEvent::SessionStart { session_id: "s1".to_string() }, &context).await.unwrap();
-        registry.emit(HookEvent::MessageStart { message_id: "m1".to_string(), role: "user".to_string() }, &context).await.unwrap();
-        registry.emit(HookEvent::MessageEnd { message_id: "m1".to_string() }, &context).await.unwrap();
-        registry.emit(HookEvent::ToolCall {
-            tool_call_id: "tc1".to_string(),
-            tool_name: "bash".to_string(),
-            input: serde_json::json!({}),
-        }, &context).await.unwrap();
-        registry.emit(HookEvent::ToolResult {
-            tool_call_id: "tc1".to_string(),
-            tool_name: "bash".to_string(),
-            result: crate::tools::ToolResult {
-                success: true,
-                output: "ok".to_string(),
-                error: None,
-            },
-        }, &context).await.unwrap();
-        registry.emit(HookEvent::AgentStart, &context).await.unwrap();
+        registry
+            .emit(
+                HookEvent::SessionStart {
+                    session_id: "s1".to_string(),
+                },
+                &context,
+            )
+            .await
+            .unwrap();
+        registry
+            .emit(
+                HookEvent::MessageStart {
+                    message_id: "m1".to_string(),
+                    role: "user".to_string(),
+                },
+                &context,
+            )
+            .await
+            .unwrap();
+        registry
+            .emit(
+                HookEvent::MessageEnd {
+                    message_id: "m1".to_string(),
+                },
+                &context,
+            )
+            .await
+            .unwrap();
+        registry
+            .emit(
+                HookEvent::ToolCall {
+                    tool_call_id: "tc1".to_string(),
+                    tool_name: "bash".to_string(),
+                    input: serde_json::json!({}),
+                },
+                &context,
+            )
+            .await
+            .unwrap();
+        registry
+            .emit(
+                HookEvent::ToolResult {
+                    tool_call_id: "tc1".to_string(),
+                    tool_name: "bash".to_string(),
+                    result: crate::tools::ToolResult {
+                        success: true,
+                        output: "ok".to_string(),
+                        error: None,
+                    },
+                },
+                &context,
+            )
+            .await
+            .unwrap();
+        registry
+            .emit(HookEvent::AgentStart, &context)
+            .await
+            .unwrap();
         registry.emit(HookEvent::AgentEnd, &context).await.unwrap();
     }
 

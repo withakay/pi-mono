@@ -47,7 +47,9 @@ pub async fn run_rpc_mode(
             session_manager.clone(),
             tool_registry.clone(),
             hook_registry.clone(),
-        ).await {
+        )
+        .await
+        {
             Ok(resp) => resp,
             Err(e) => RpcResponse {
                 response: String::new(),
@@ -71,28 +73,38 @@ async fn process_rpc_request(
     hook_registry: Arc<HookRegistry>,
 ) -> Result<RpcResponse> {
     let request: RpcRequest = serde_json::from_str(json)?;
-    let session_id = request.session_id.unwrap_or_else(|| "rpc-default".to_string());
+    let session_id = request
+        .session_id
+        .unwrap_or_else(|| "rpc-default".to_string());
 
     let mut session = match AgentSession::load(
-        session_id.clone(), session_manager.clone(), tool_registry.clone(), hook_registry.clone()
-    ).await {
+        session_id.clone(),
+        session_manager.clone(),
+        tool_registry.clone(),
+        hook_registry.clone(),
+    )
+    .await
+    {
         Ok(s) => s,
         Err(_) => {
             session_manager.create_session(&session_id).await?;
-            AgentSession::new(session_id.clone(), session_manager, tool_registry, hook_registry)
+            AgentSession::new(
+                session_id.clone(),
+                session_manager,
+                tool_registry,
+                hook_registry,
+            )
         }
     };
 
     let response = match LlmClient::from_env() {
-        Ok(client) => {
-            session.run(request.message, &client).await?
-        }
+        Ok(client) => session.run(request.message, &client).await?,
         Err(_) => {
             session.add_user_message(request.message.clone()).await?;
             let echo = format!("Echo: {} (no LLM provider configured)", request.message);
-            session.add_assistant_message(
-                crate::core::messages::MessageContent::Text(echo.clone())
-            ).await?;
+            session
+                .add_assistant_message(crate::core::messages::MessageContent::Text(echo.clone()))
+                .await?;
             echo
         }
     };
