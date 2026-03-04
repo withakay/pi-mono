@@ -376,4 +376,192 @@ mod tests {
         assert!(!result.success);
         assert!(result.error.as_ref().unwrap().contains("multiple times"));
     }
+
+    #[tokio::test]
+    async fn test_edit_trait_methods() {
+        let tool = EditTool::new();
+        assert_eq!(tool.name(), "edit");
+        assert!(!tool.description().is_empty());
+        let schema = tool.input_schema();
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"]["path"].is_object());
+    }
+
+    #[tokio::test]
+    async fn test_edit_text_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.txt");
+        fs::write(&test_file, "Hello world\n").await.unwrap();
+
+        let tool = EditTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "path": "test.txt",
+            "oldText": "NONEXISTENT TEXT",
+            "newText": "replacement"
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.as_ref().unwrap().contains("Could not find"));
+    }
+
+    #[tokio::test]
+    async fn test_edit_no_change() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.txt");
+        fs::write(&test_file, "Hello world\n").await.unwrap();
+
+        let tool = EditTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "path": "test.txt",
+            "oldText": "Hello world",
+            "newText": "Hello world"
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.as_ref().unwrap().contains("no changes"));
+    }
+
+    #[tokio::test]
+    async fn test_edit_bom_handling() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("bom.txt");
+        // Write file with BOM
+        fs::write(&test_file, "\u{feff}Hello world\nSecond line\n")
+            .await
+            .unwrap();
+
+        let tool = EditTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "path": "bom.txt",
+            "oldText": "Hello world",
+            "newText": "Hello BOM"
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+
+        let content = fs::read_to_string(&test_file).await.unwrap();
+        assert!(content.starts_with('\u{feff}')); // BOM preserved
+        assert!(content.contains("Hello BOM"));
+    }
+
+    #[tokio::test]
+    async fn test_edit_absolute_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("abs_edit.txt");
+        fs::write(&test_file, "old text here\n").await.unwrap();
+
+        let tool = EditTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "path": test_file.to_str().unwrap(),
+            "oldText": "old text",
+            "newText": "new text"
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+
+        let content = fs::read_to_string(&test_file).await.unwrap();
+        assert!(content.contains("new text"));
+    }
+
+    #[tokio::test]
+    async fn test_edit_nonexistent_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let tool = EditTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "path": "nonexistent.txt",
+            "oldText": "old",
+            "newText": "new"
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.is_some());
+    }
+
+    #[test]
+    fn test_edit_helper_functions() {
+        // Test detect_line_ending
+        assert_eq!(EditTool::detect_line_ending("hello\r\nworld\r\n"), "\r\n");
+        assert_eq!(EditTool::detect_line_ending("hello\nworld\n"), "\n");
+
+        // Test normalize_to_lf
+        assert_eq!(
+            EditTool::normalize_to_lf("hello\r\nworld\r\n"),
+            "hello\nworld\n"
+        );
+
+        // Test restore_line_endings
+        assert_eq!(
+            EditTool::restore_line_endings("hello\nworld\n", "\r\n"),
+            "hello\r\nworld\r\n"
+        );
+        assert_eq!(
+            EditTool::restore_line_endings("hello\nworld\n", "\n"),
+            "hello\nworld\n"
+        );
+
+        // Test strip_bom
+        assert_eq!(EditTool::strip_bom("\u{feff}hello"), "hello");
+        assert_eq!(EditTool::strip_bom("hello"), "hello");
+
+        // Test normalize_for_fuzzy_match
+        let result = EditTool::normalize_for_fuzzy_match("Hello \u{201C}world\u{201D}");
+        assert!(result.contains("\"world\""));
+
+        let result = EditTool::normalize_for_fuzzy_match("em\u{2014}dash");
+        assert!(result.contains("-"));
+    }
+
+    #[test]
+    fn test_edit_fuzzy_find() {
+        // Exact match
+        let content = "Hello world\nSecond line\n";
+        let result = EditTool::fuzzy_find_text(content, "Hello world");
+        assert!(result.is_some());
+
+        // No match
+        let result = EditTool::fuzzy_find_text(content, "NONEXISTENT");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_edit_generate_diff() {
+        let old = "line1\nline2\nline3\n";
+        let new = "line1\nmodified\nline3\n";
+        let (diff, first_line) = EditTool::generate_diff(old, new, "test.txt");
+        assert!(diff.contains("---"));
+        assert!(diff.contains("+++"));
+        assert!(diff.contains("-line2"));
+        assert!(diff.contains("+modified"));
+        assert!(first_line.is_some());
+    }
+
+    #[test]
+    fn test_edit_generate_diff_multiple_groups() {
+        // Create content with changes far apart to trigger multiple diff groups
+        let old_lines: Vec<String> = (1..=50).map(|i| format!("line{}", i)).collect();
+        let old = old_lines.join("\n");
+
+        let mut new_lines = old_lines.clone();
+        new_lines[2] = "modified_line3".to_string(); // Change near start
+        new_lines[48] = "modified_line49".to_string(); // Change near end
+        let new = new_lines.join("\n");
+
+        let (diff, first_line) = EditTool::generate_diff(&old, &new, "test.txt");
+        assert!(diff.contains("...")); // Separator between non-adjacent diff groups
+        assert!(first_line.is_some());
+    }
+
+    #[test]
+    fn test_edit_generate_diff_no_trailing_newline() {
+        let old = "line1\nline2";
+        let new = "line1\nmodified";
+        let (diff, _) = EditTool::generate_diff(old, new, "test.txt");
+        // Lines without trailing newline should still produce valid diff output
+        assert!(diff.contains("modified"));
+    }
 }

@@ -267,4 +267,143 @@ mod tests {
         let tool_calls = msg.tool_calls();
         assert_eq!(tool_calls.len(), 1);
     }
+
+    #[test]
+    fn test_system_message_creation() {
+        let msg = Message::system("You are a helpful assistant");
+        assert_eq!(msg.role, MessageRole::System);
+        assert_eq!(msg.text_content(), Some("You are a helpful assistant"));
+    }
+
+    #[test]
+    fn test_assistant_message_creation() {
+        let msg = Message::assistant(MessageContent::Text("Hello!".to_string()));
+        assert_eq!(msg.role, MessageRole::Assistant);
+        assert_eq!(msg.text_content(), Some("Hello!"));
+    }
+
+    #[test]
+    fn test_with_parent() {
+        let msg = Message::user("test").with_parent("parent_123".to_string());
+        assert_eq!(msg.parent_id, Some("parent_123".to_string()));
+    }
+
+    #[test]
+    fn test_with_model() {
+        let msg = Message::assistant(MessageContent::Text("hi".to_string()))
+            .with_model("gpt-4".to_string());
+        assert_eq!(msg.model, Some("gpt-4".to_string()));
+    }
+
+    #[test]
+    fn test_text_content_from_blocks() {
+        let blocks = vec![
+            ContentBlock::Thinking {
+                thinking: "Let me think...".to_string(),
+            },
+            ContentBlock::Text {
+                text: "Here is the answer".to_string(),
+            },
+        ];
+        let msg = Message::assistant(MessageContent::Blocks(blocks));
+        assert_eq!(msg.text_content(), Some("Here is the answer"));
+    }
+
+    #[test]
+    fn test_text_content_no_text_block() {
+        let blocks = vec![ContentBlock::Thinking {
+            thinking: "thinking only".to_string(),
+        }];
+        let msg = Message::assistant(MessageContent::Blocks(blocks));
+        assert_eq!(msg.text_content(), None);
+    }
+
+    #[test]
+    fn test_tool_calls_empty_for_text_message() {
+        let msg = Message::user("hello");
+        let calls = msg.tool_calls();
+        assert!(calls.is_empty());
+    }
+
+    #[test]
+    fn test_session_entry_id() {
+        let msg = Message::user("test");
+        let msg_id = msg.id.clone();
+        let entry = SessionEntry::Message(msg);
+        assert_eq!(entry.id(), msg_id);
+        assert_eq!(entry.parent_id(), None); // Message with no parent
+
+        // Message with parent
+        let msg_with_parent = Message::user("test").with_parent("parent_msg".to_string());
+        let entry_with_parent = SessionEntry::Message(msg_with_parent);
+        assert_eq!(entry_with_parent.parent_id(), Some("parent_msg"));
+
+        let compaction = SessionEntry::Compaction {
+            id: "comp_1".to_string(),
+            parent_id: Some("parent".to_string()),
+            summary: "summary".to_string(),
+            removed_count: 5,
+            timestamp: 12345,
+        };
+        assert_eq!(compaction.id(), "comp_1");
+        assert_eq!(compaction.parent_id(), Some("parent"));
+
+        let branch = SessionEntry::Branch {
+            id: "branch_1".to_string(),
+            parent_id: None,
+            summary: "branch summary".to_string(),
+            branch_id: "b1".to_string(),
+            timestamp: 12345,
+        };
+        assert_eq!(branch.id(), "branch_1");
+        assert_eq!(branch.parent_id(), None);
+
+        let custom = SessionEntry::Custom {
+            id: "custom_1".to_string(),
+            parent_id: Some("p1".to_string()),
+            data: serde_json::json!({"key": "value"}),
+            timestamp: 12345,
+        };
+        assert_eq!(custom.id(), "custom_1");
+        assert_eq!(custom.parent_id(), Some("p1"));
+    }
+
+    #[test]
+    fn test_content_block_serialization() {
+        let blocks = vec![
+            ContentBlock::Text {
+                text: "hello".to_string(),
+            },
+            ContentBlock::ToolUse {
+                id: "t1".to_string(),
+                name: "read".to_string(),
+                input: serde_json::json!({}),
+            },
+            ContentBlock::ToolResult {
+                tool_use_id: "t1".to_string(),
+                content: "result".to_string(),
+                is_error: Some(false),
+            },
+            ContentBlock::Thinking {
+                thinking: "hmm".to_string(),
+            },
+        ];
+        let json = serde_json::to_string(&blocks).unwrap();
+        let deserialized: Vec<ContentBlock> = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.len(), 4);
+    }
+
+    #[test]
+    fn test_session_entry_serialization() {
+        let compaction = SessionEntry::Compaction {
+            id: "c1".to_string(),
+            parent_id: None,
+            summary: "compacted".to_string(),
+            removed_count: 3,
+            timestamp: 100,
+        };
+        let json = serde_json::to_string(&compaction).unwrap();
+        let deserialized: SessionEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.id(), "c1");
+    }
 }

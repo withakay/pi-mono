@@ -6,3 +6,7 @@ pub mod footer;
 pub mod keybindings;
 pub mod messages;
 pub mod theme;
+
+pub use app::App;
+pub use keybindings::AppKeybindings;
+pub use theme::Theme;
