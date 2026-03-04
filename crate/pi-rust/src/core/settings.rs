@@ -81,19 +81,15 @@ impl Default for TerminalSettings {
 /// Thinking level
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum ThinkingLevel {
     Off,
     Minimal,
     Low,
+    #[default]
     Medium,
     High,
     XHigh,
-}
-
-impl Default for ThinkingLevel {
-    fn default() -> Self {
-        Self::Medium
-    }
 }
 
 /// Main settings structure

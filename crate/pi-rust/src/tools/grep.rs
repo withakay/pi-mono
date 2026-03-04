@@ -48,6 +48,7 @@ impl GrepTool {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_cwd(cwd: PathBuf) -> Self {
         Self { cwd }
     }
