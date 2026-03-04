@@ -7,3 +7,4 @@ pub mod messages;
 pub mod persistence;
 pub mod session;
 pub mod settings;
+pub mod system_prompt;

@@ -218,4 +218,101 @@ mod tests {
         assert!(!result.output.contains("Line 4"));
         assert!(!result.output.contains("Line 8"));
     }
+
+    #[tokio::test]
+    async fn test_read_trait_methods() {
+        let tool = ReadTool::new();
+        assert_eq!(tool.name(), "read");
+        assert!(!tool.description().is_empty());
+        let schema = tool.input_schema();
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"]["path"].is_object());
+    }
+
+    #[tokio::test]
+    async fn test_read_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let tool = ReadTool::with_cwd(temp_dir.path().to_path_buf());
+
+        let input = serde_json::json!({
+            "path": temp_dir.path().to_str().unwrap()
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.as_ref().unwrap().contains("Not a file"));
+    }
+
+    #[tokio::test]
+    async fn test_read_missing_path_param() {
+        let tool = ReadTool::new();
+        let input = serde_json::json!({});
+        let result = tool.execute(input).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_read_absolute_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("abs_test.txt");
+        tokio::fs::write(&file_path, "absolute content")
+            .await
+            .unwrap();
+
+        let tool = ReadTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "path": file_path.to_str().unwrap()
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("absolute content"));
+    }
+
+    #[tokio::test]
+    async fn test_read_truncation() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("large.txt");
+
+        // Create a file with more than 2000 lines
+        let content: String = (1..=2500)
+            .map(|i| format!("Line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
+        tokio::fs::write(&file_path, content).await.unwrap();
+
+        let tool = ReadTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "path": "large.txt"
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("Truncated"));
+    }
+
+    #[tokio::test]
+    async fn test_read_byte_limit_truncation() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("wide.txt");
+
+        // Create a file with lines long enough to exceed 100KB byte limit
+        // 200 lines × 600 chars each → ~120KB before formatting, even more after line numbers
+        let long_line = "X".repeat(600);
+        let content: String = (1..=200)
+            .map(|_| long_line.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
+        tokio::fs::write(&file_path, content).await.unwrap();
+
+        let tool = ReadTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "path": "wide.txt"
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        // Output exceeds the 100KB byte limit, so it should be truncated
+        assert!(result.output.contains("100KB limit"));
+    }
 }

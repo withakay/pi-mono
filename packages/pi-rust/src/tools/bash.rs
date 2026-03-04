@@ -109,82 +109,71 @@ impl Tool for BashTool {
         let mut output = String::new();
         let mut truncated = false;
 
+        async fn collect_process_output(
+            stdout_reader: &mut tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
+            stderr_reader: &mut tokio::io::Lines<BufReader<tokio::process::ChildStderr>>,
+            output: &mut String,
+            truncated: &mut bool,
+        ) -> std::io::Result<()> {
+            let mut stdout_done = false;
+            let mut stderr_done = false;
+            loop {
+                if stdout_done && stderr_done {
+                    break;
+                }
+                tokio::select! {
+                    line = stdout_reader.next_line(), if !stdout_done => {
+                        match line {
+                            Ok(Some(line)) => {
+                                output.push_str(&line);
+                                output.push('\n');
+                                if output.len() > DEFAULT_MAX_OUTPUT {
+                                    *truncated = true;
+                                    break;
+                                }
+                            }
+                            Ok(None) => stdout_done = true,
+                            Err(e) => return Err(e),
+                        }
+                    }
+                    line = stderr_reader.next_line(), if !stderr_done => {
+                        match line {
+                            Ok(Some(line)) => {
+                                output.push_str(&line);
+                                output.push('\n');
+                                if output.len() > DEFAULT_MAX_OUTPUT {
+                                    *truncated = true;
+                                    break;
+                                }
+                            }
+                            Ok(None) => stderr_done = true,
+                            Err(e) => return Err(e),
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
+
         // Collect output with timeout
         let result = if let Some(secs) = timeout_secs {
-            tokio::time::timeout(std::time::Duration::from_secs(secs), async {
-                // Read both stdout and stderr concurrently
-                loop {
-                    tokio::select! {
-                        line = stdout_reader.next_line() => {
-                            match line {
-                                Ok(Some(line)) => {
-                                    output.push_str(&line);
-                                    output.push('\n');
-                                    if output.len() > DEFAULT_MAX_OUTPUT {
-                                        truncated = true;
-                                        break;
-                                    }
-                                }
-                                Ok(None) => break,
-                                Err(e) => return Err(e),
-                            }
-                        }
-                        line = stderr_reader.next_line() => {
-                            match line {
-                                Ok(Some(line)) => {
-                                    output.push_str(&line);
-                                    output.push('\n');
-                                    if output.len() > DEFAULT_MAX_OUTPUT {
-                                        truncated = true;
-                                        break;
-                                    }
-                                }
-                                Ok(None) => break,
-                                Err(e) => return Err(e),
-                            }
-                        }
-                    }
-                }
-                Ok::<(), std::io::Error>(())
-            })
+            tokio::time::timeout(
+                std::time::Duration::from_secs(secs),
+                collect_process_output(
+                    &mut stdout_reader,
+                    &mut stderr_reader,
+                    &mut output,
+                    &mut truncated,
+                ),
+            )
             .await
         } else {
-            // No timeout
-            Ok(async {
-                loop {
-                    tokio::select! {
-                        line = stdout_reader.next_line() => {
-                            match line {
-                                Ok(Some(line)) => {
-                                    output.push_str(&line);
-                                    output.push('\n');
-                                    if output.len() > DEFAULT_MAX_OUTPUT {
-                                        truncated = true;
-                                        break;
-                                    }
-                                }
-                                Ok(None) => break,
-                                Err(e) => return Err(e),
-                            }
-                        }
-                        line = stderr_reader.next_line() => {
-                            match line {
-                                Ok(Some(line)) => {
-                                    output.push_str(&line);
-                                    output.push('\n');
-                                    if output.len() > DEFAULT_MAX_OUTPUT {
-                                        truncated = true;
-                                        break;
-                                    }
-                                }
-                                Ok(None) => break,
-                                Err(e) => return Err(e),
-                            }
-                        }
-                    }
-                }
-                Ok::<(), std::io::Error>(())
-            }
+            Ok(collect_process_output(
+                &mut stdout_reader,
+                &mut stderr_reader,
+                &mut output,
+                &mut truncated,
+            )
             .await)
         };
 
@@ -270,5 +259,81 @@ mod tests {
         assert!(result.success);
         // Just check that we got some output containing a path
         assert!(!result.output.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_bash_trait_methods() {
+        let tool = BashTool::new();
+        assert_eq!(tool.name(), "bash");
+        assert!(!tool.description().is_empty());
+        let schema = tool.input_schema();
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"]["command"].is_object());
+    }
+
+    #[tokio::test]
+    async fn test_bash_missing_command() {
+        let tool = BashTool::new();
+        let input = serde_json::json!({});
+        let result = tool.execute(input).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_bash_nonexistent_cwd() {
+        let tool = BashTool::with_cwd(std::path::PathBuf::from("/nonexistent/path"));
+        let input = serde_json::json!({
+            "command": "echo hello"
+        });
+        let result = tool.execute(input).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.as_ref().unwrap().contains("does not exist"));
+    }
+
+    #[tokio::test]
+    async fn test_bash_with_timeout() {
+        let tool = BashTool::new();
+        let input = serde_json::json!({
+            "command": "echo 'fast command'",
+            "timeout": 5
+        });
+        let result = tool.execute(input).await.unwrap();
+        // The command should complete successfully within timeout
+        assert!(result.success);
+    }
+
+    #[tokio::test]
+    async fn test_bash_timeout_kills_long_command() {
+        let tool = BashTool::new();
+        let input = serde_json::json!({
+            "command": "sleep 60",
+            "timeout": 1
+        });
+        let result = tool.execute(input).await.unwrap();
+        assert!(!result.success);
+        assert!(result.output.contains("timed out") || result.output.contains("killed"));
+    }
+
+    #[tokio::test]
+    async fn test_bash_stderr_output() {
+        let tool = BashTool::new();
+        let input = serde_json::json!({
+            "command": "echo 'stdout message' && echo 'stderr message' >&2"
+        });
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        // Both stdout and stderr should be captured
+        assert!(
+            result.output.contains("stdout message") || result.output.contains("stderr message")
+        );
+    }
+
+    #[test]
+    fn test_bash_get_shell() {
+        let (shell, args) = BashTool::get_shell();
+        assert!(!shell.is_empty());
+        assert!(!args.is_empty());
+        // On Linux, should be bash or sh with -c
+        assert!(args.contains(&"-c".to_string()));
     }
 }

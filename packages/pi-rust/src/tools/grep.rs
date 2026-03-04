@@ -397,4 +397,157 @@ mod tests {
         assert!(result.success);
         assert!(result.output.contains("Match limit"));
     }
+
+    #[tokio::test]
+    async fn test_grep_trait_methods() {
+        let tool = GrepTool::new();
+        assert_eq!(tool.name(), "grep");
+        assert!(!tool.description().is_empty());
+        let schema = tool.input_schema();
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"]["pattern"].is_object());
+    }
+
+    #[tokio::test]
+    async fn test_grep_no_matches() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.txt");
+        fs::write(&test_file, "Hello world\n").await.unwrap();
+
+        let tool = GrepTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "pattern": "NONEXISTENT_PATTERN_XYZ"
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("No matches found"));
+    }
+
+    #[tokio::test]
+    async fn test_grep_literal_search() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.txt");
+        fs::write(&test_file, "Hello world (test)\nfoo[bar]\n")
+            .await
+            .unwrap();
+
+        let tool = GrepTool::with_cwd(temp_dir.path().to_path_buf());
+        // Without literal, [bar] would be treated as regex character class
+        let input = serde_json::json!({
+            "pattern": "[bar]",
+            "literal": true
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("[bar]"));
+    }
+
+    #[tokio::test]
+    async fn test_grep_with_context() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.txt");
+        fs::write(&test_file, "line1\nline2\nMATCH\nline4\nline5\n")
+            .await
+            .unwrap();
+
+        let tool = GrepTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "pattern": "MATCH",
+            "context": 1
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("MATCH"));
+    }
+
+    #[tokio::test]
+    async fn test_grep_invalid_input() {
+        let tool = GrepTool::new();
+        let input = serde_json::json!({});
+        // Invalid input (missing required "pattern" field) should fail
+        match tool.execute(input).await {
+            Err(_) => {} // Expected: deserialization error
+            Ok(result) => assert!(!result.success, "Should not succeed with missing pattern"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_grep_invalid_regex() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.txt");
+        fs::write(&test_file, "test\n").await.unwrap();
+
+        let tool = GrepTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "pattern": "[invalid regex"
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(!result.success);
+        assert!(result.error.is_some());
+    }
+
+    #[test]
+    fn test_grep_truncate_line() {
+        let short = "short line";
+        let (result, truncated) = GrepTool::truncate_line(short, 500);
+        assert_eq!(result, short);
+        assert!(!truncated);
+
+        let long = "a".repeat(600);
+        let (result, truncated) = GrepTool::truncate_line(&long, 500);
+        assert!(result.contains("truncated"));
+        assert!(truncated);
+    }
+
+    #[tokio::test]
+    async fn test_grep_absolute_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.txt");
+        fs::write(&test_file, "find me here\n").await.unwrap();
+
+        let tool = GrepTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "pattern": "find me",
+            "path": temp_dir.path().to_str().unwrap()
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("find me"));
+    }
+
+    #[tokio::test]
+    async fn test_grep_long_line_truncation_notice() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.txt");
+        // Create a file with a very long matching line (>500 chars)
+        let long_line = format!("MATCH {}", "x".repeat(600));
+        fs::write(&test_file, &long_line).await.unwrap();
+
+        let tool = GrepTool::with_cwd(temp_dir.path().to_path_buf());
+        let input = serde_json::json!({
+            "pattern": "MATCH"
+        });
+
+        let result = tool.execute(input).await.unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("truncated"));
+    }
+
+    #[test]
+    fn test_grep_truncate_line_utf8_boundary() {
+        // Test truncation at a UTF-8 boundary
+        // Create a string with multi-byte characters
+        let mut s = String::new();
+        for _ in 0..200 {
+            s.push('é'); // 2-byte UTF-8 character
+        }
+        let (result, truncated) = GrepTool::truncate_line(&s, 100);
+        assert!(truncated);
+        assert!(result.contains("truncated"));
+    }
 }
