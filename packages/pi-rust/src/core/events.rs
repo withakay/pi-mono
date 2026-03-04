@@ -1,52 +1,36 @@
 // Event system using tokio channels for type-safe event dispatch
 // Based on TypeScript EventEmitter pattern but with Rust's type safety
 
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use anyhow::Result;
 
 /// Events that can be emitted by the agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AgentEvent {
     /// Agent session started
-    SessionStart {
-        session_id: String,
-    },
+    SessionStart { session_id: String },
 
     /// Agent session ended
-    SessionEnd {
-        session_id: String,
-    },
+    SessionEnd { session_id: String },
 
     /// New turn started (user prompt submitted)
-    TurnStart {
-        turn_id: String,
-    },
+    TurnStart { turn_id: String },
 
     /// Turn completed
-    TurnEnd {
-        turn_id: String,
-    },
+    TurnEnd { turn_id: String },
 
     /// Message streaming started
-    MessageStart {
-        message_id: String,
-        role: String,
-    },
+    MessageStart { message_id: String, role: String },
 
     /// Message content updated (streaming)
-    MessageUpdate {
-        message_id: String,
-        content: String,
-    },
+    MessageUpdate { message_id: String, content: String },
 
     /// Message completed
-    MessageEnd {
-        message_id: String,
-    },
+    MessageEnd { message_id: String },
 
     /// Tool call initiated
     ToolCall {
@@ -91,10 +75,7 @@ pub enum AgentEvent {
     },
 
     /// Custom event from hooks/extensions
-    Custom {
-        name: String,
-        data: Value,
-    },
+    Custom { name: String, data: Value },
 }
 
 /// Event bus for distributing events to subscribers
@@ -195,7 +176,10 @@ mod tests {
         let deserialized: AgentEvent = serde_json::from_str(&json).unwrap();
 
         match deserialized {
-            AgentEvent::MessageUpdate { message_id, content } => {
+            AgentEvent::MessageUpdate {
+                message_id,
+                content,
+            } => {
                 assert_eq!(message_id, "msg_123");
                 assert_eq!(content, "Hello, world!");
             }

@@ -1,8 +1,8 @@
 // Write tool - Write file contents
 use super::{Tool, ToolResult};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde_json::Value;
-use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
@@ -17,6 +17,7 @@ impl WriteTool {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_cwd(cwd: PathBuf) -> Self {
         Self { cwd }
     }
@@ -71,9 +72,12 @@ impl Tool for WriteTool {
 
         // Create parent directories if they don't exist
         if let Some(parent) = absolute_path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .with_context(|| format!("Failed to create parent directories for: {}", absolute_path.display()))?;
+            fs::create_dir_all(parent).await.with_context(|| {
+                format!(
+                    "Failed to create parent directories for: {}",
+                    absolute_path.display()
+                )
+            })?;
         }
 
         // Write the file
@@ -152,7 +156,9 @@ mod tests {
         let file_path = temp_dir.path().join("test.txt");
 
         // Create initial file
-        tokio::fs::write(&file_path, "Initial content").await.unwrap();
+        tokio::fs::write(&file_path, "Initial content")
+            .await
+            .unwrap();
 
         let tool = WriteTool::with_cwd(temp_dir.path().to_path_buf());
         let input = serde_json::json!({
