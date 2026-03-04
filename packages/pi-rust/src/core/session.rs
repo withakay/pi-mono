@@ -98,8 +98,8 @@ impl AgentSession {
 
     /// Add a user message to the session
     pub async fn add_user_message(&mut self, content: String) -> Result<String> {
-        let message =
-            Message::user(content).with_parent(self.current_head.clone().unwrap_or_default());
+        let message = Message::user(content)
+            .with_parent(self.current_head.clone().unwrap_or_default());
 
         let message_id = message.id.clone();
         let entry = SessionEntry::Message(message);
@@ -127,37 +127,33 @@ impl AgentSession {
             cwd: self.cwd.clone(),
             session_id: self.id.clone(),
         };
-        self.hook_registry
-            .emit(
-                HookEvent::MessageStart {
-                    message_id: message_id.clone(),
-                    role: "user".to_string(),
-                },
-                &hook_context,
-            )
-            .await?;
+        self.hook_registry.emit(
+            HookEvent::MessageStart {
+                message_id: message_id.clone(),
+                role: "user".to_string(),
+            },
+            &hook_context,
+        ).await?;
 
         self.event_bus.emit(AgentEvent::MessageEnd {
             message_id: message_id.clone(),
         })?;
 
         // Emit hook event for message end
-        self.hook_registry
-            .emit(
-                HookEvent::MessageEnd {
-                    message_id: message_id.clone(),
-                },
-                &hook_context,
-            )
-            .await?;
+        self.hook_registry.emit(
+            HookEvent::MessageEnd {
+                message_id: message_id.clone(),
+            },
+            &hook_context,
+        ).await?;
 
         Ok(message_id)
     }
 
     /// Add an assistant message to the session
     pub async fn add_assistant_message(&mut self, content: MessageContent) -> Result<String> {
-        let message =
-            Message::assistant(content).with_parent(self.current_head.clone().unwrap_or_default());
+        let message = Message::assistant(content)
+            .with_parent(self.current_head.clone().unwrap_or_default());
 
         let message_id = message.id.clone();
         let entry = SessionEntry::Message(message);
@@ -185,29 +181,25 @@ impl AgentSession {
             cwd: self.cwd.clone(),
             session_id: self.id.clone(),
         };
-        self.hook_registry
-            .emit(
-                HookEvent::MessageStart {
-                    message_id: message_id.clone(),
-                    role: "assistant".to_string(),
-                },
-                &hook_context,
-            )
-            .await?;
+        self.hook_registry.emit(
+            HookEvent::MessageStart {
+                message_id: message_id.clone(),
+                role: "assistant".to_string(),
+            },
+            &hook_context,
+        ).await?;
 
         self.event_bus.emit(AgentEvent::MessageEnd {
             message_id: message_id.clone(),
         })?;
 
         // Emit hook event for message end
-        self.hook_registry
-            .emit(
-                HookEvent::MessageEnd {
-                    message_id: message_id.clone(),
-                },
-                &hook_context,
-            )
-            .await?;
+        self.hook_registry.emit(
+            HookEvent::MessageEnd {
+                message_id: message_id.clone(),
+            },
+            &hook_context,
+        ).await?;
 
         Ok(message_id)
     }
@@ -322,8 +314,9 @@ impl AgentSession {
         };
 
         let model = Some(llm_client.default_model().to_string());
+        let mut final_text = String::new();
 
-        let final_text = loop {
+        loop {
             let messages = self.build_llm_messages();
 
             // Emit turn start
@@ -415,8 +408,10 @@ impl AgentSession {
                     });
                 }
                 for (id, name, json) in &tool_calls {
-                    let input: serde_json::Value = serde_json::from_str(json)
-                        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                    let input: serde_json::Value =
+                        serde_json::from_str(json).unwrap_or(serde_json::Value::Object(
+                            serde_json::Map::new(),
+                        ));
                     blocks.push(ContentBlock::ToolUse {
                         id: id.clone(),
                         name: name.clone(),
@@ -433,6 +428,7 @@ impl AgentSession {
             };
 
             self.add_assistant_message(assistant_content).await?;
+            final_text = text_buf;
 
             match stop_reason.as_deref() {
                 Some("tool_use") if !tool_calls.is_empty() => {
@@ -440,8 +436,10 @@ impl AgentSession {
                     let mut result_blocks: Vec<ContentBlock> = Vec::new();
 
                     for (id, name, json) in &tool_calls {
-                        let input: serde_json::Value = serde_json::from_str(json)
-                            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                        let input: serde_json::Value =
+                            serde_json::from_str(json).unwrap_or(serde_json::Value::Object(
+                                serde_json::Map::new(),
+                            ));
 
                         eprintln!("[tool] {} called with {}", name, json);
 
@@ -499,10 +497,10 @@ impl AgentSession {
                 }
                 _ => {
                     // end_turn or unknown: we're done
-                    break text_buf;
+                    break;
                 }
             }
-        };
+        }
 
         Ok(final_text)
     }
@@ -536,9 +534,9 @@ impl AgentSession {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use super::super::hooks::HookRegistry;
     use super::super::messages::MessageRole;
-    use super::*;
     use tempfile::TempDir;
 
     #[tokio::test]
@@ -550,12 +548,7 @@ mod tests {
 
         session_manager.create_session("test").await.unwrap();
 
-        let session = AgentSession::new(
-            "test".to_string(),
-            session_manager,
-            tool_registry,
-            hook_registry,
-        );
+        let session = AgentSession::new("test".to_string(), session_manager, tool_registry, hook_registry);
 
         assert_eq!(session.session_id(), "test");
         assert_eq!(session.entry_count(), 0);
@@ -570,17 +563,9 @@ mod tests {
 
         session_manager.create_session("test").await.unwrap();
 
-        let mut session = AgentSession::new(
-            "test".to_string(),
-            session_manager.clone(),
-            tool_registry,
-            hook_registry,
-        );
+        let mut session = AgentSession::new("test".to_string(), session_manager.clone(), tool_registry, hook_registry);
 
-        let msg_id = session
-            .add_user_message("Hello!".to_string())
-            .await
-            .unwrap();
+        let msg_id = session.add_user_message("Hello!".to_string()).await.unwrap();
 
         assert_eq!(session.entry_count(), 1);
         assert!(!msg_id.is_empty());
@@ -600,30 +585,12 @@ mod tests {
         session_manager.create_session("test").await.unwrap();
 
         // Add some messages
-        let mut session1 = AgentSession::new(
-            "test".to_string(),
-            session_manager.clone(),
-            tool_registry.clone(),
-            hook_registry.clone(),
-        );
-        session1
-            .add_user_message("Message 1".to_string())
-            .await
-            .unwrap();
-        session1
-            .add_assistant_message(MessageContent::Text("Response 1".to_string()))
-            .await
-            .unwrap();
+        let mut session1 = AgentSession::new("test".to_string(), session_manager.clone(), tool_registry.clone(), hook_registry.clone());
+        session1.add_user_message("Message 1".to_string()).await.unwrap();
+        session1.add_assistant_message(MessageContent::Text("Response 1".to_string())).await.unwrap();
 
         // Load in a new session instance
-        let session2 = AgentSession::load(
-            "test".to_string(),
-            session_manager,
-            tool_registry,
-            hook_registry,
-        )
-        .await
-        .unwrap();
+        let session2 = AgentSession::load("test".to_string(), session_manager, tool_registry, hook_registry).await.unwrap();
 
         assert_eq!(session2.entry_count(), 2);
         let messages = session2.get_messages();
@@ -639,22 +606,11 @@ mod tests {
 
         session_manager.create_session("test").await.unwrap();
 
-        let mut session = AgentSession::new(
-            "test".to_string(),
-            session_manager,
-            tool_registry,
-            hook_registry,
-        );
+        let mut session = AgentSession::new("test".to_string(), session_manager, tool_registry, hook_registry);
 
         session.add_user_message("Hello".to_string()).await.unwrap();
-        session
-            .add_assistant_message(MessageContent::Text("Hi!".to_string()))
-            .await
-            .unwrap();
-        session
-            .add_user_message("How are you?".to_string())
-            .await
-            .unwrap();
+        session.add_assistant_message(MessageContent::Text("Hi!".to_string())).await.unwrap();
+        session.add_user_message("How are you?".to_string()).await.unwrap();
 
         let history = session.get_conversation_history();
         assert_eq!(history.len(), 3);
@@ -672,12 +628,7 @@ mod tests {
 
         session_manager.create_session("test").await.unwrap();
 
-        let session = AgentSession::new(
-            "test".to_string(),
-            session_manager,
-            tool_registry,
-            hook_registry,
-        );
+        let session = AgentSession::new("test".to_string(), session_manager, tool_registry, hook_registry);
         let _bus = session.event_bus();
         // Verify event bus is accessible
         assert_eq!(session.session_id(), "test");
@@ -692,12 +643,7 @@ mod tests {
 
         session_manager.create_session("test").await.unwrap();
 
-        let mut session = AgentSession::new(
-            "test".to_string(),
-            session_manager.clone(),
-            tool_registry,
-            hook_registry,
-        );
+        let mut session = AgentSession::new("test".to_string(), session_manager.clone(), tool_registry, hook_registry);
 
         // Add a user message
         session.add_user_message("Hello".to_string()).await.unwrap();
@@ -710,10 +656,7 @@ mod tests {
             removed_count: 5,
             timestamp: 12345,
         };
-        session_manager
-            .append_entry("test", &compaction_entry)
-            .await
-            .unwrap();
+        session_manager.append_entry("test", &compaction_entry).await.unwrap();
 
         // Reload session
         let session2 = AgentSession::load(
@@ -721,9 +664,7 @@ mod tests {
             session_manager,
             Arc::new(ToolRegistry::new()),
             Arc::new(HookRegistry::new()),
-        )
-        .await
-        .unwrap();
+        ).await.unwrap();
 
         // Should have 2 entries total but only 1 message
         assert_eq!(session2.entry_count(), 2);

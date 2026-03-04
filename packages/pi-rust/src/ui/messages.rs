@@ -117,8 +117,13 @@ impl MessagesView {
         // Render scrollbar if needed
         if total_lines > visible_height {
             let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
-            let mut scrollbar_state = ScrollbarState::new(total_lines).position(scroll);
-            frame.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
+            let mut scrollbar_state =
+                ScrollbarState::new(total_lines).position(scroll);
+            frame.render_stateful_widget(
+                scrollbar,
+                area,
+                &mut scrollbar_state,
+            );
         }
     }
 }

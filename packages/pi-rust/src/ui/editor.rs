@@ -73,16 +73,8 @@ impl Editor {
         let display = if self.is_focused {
             let (before, after) = self.content.split_at(self.cursor_pos);
             let char_len = after.chars().next().map(|c| c.len_utf8()).unwrap_or(0);
-            let cursor_char = after
-                .chars()
-                .next()
-                .map(|c| c.to_string())
-                .unwrap_or_else(|| "█".to_string());
-            let after_cursor = if char_len == 0 {
-                ""
-            } else {
-                &after[char_len..]
-            };
+            let cursor_char = after.chars().next().map(|c| c.to_string()).unwrap_or_else(|| "█".to_string());
+            let after_cursor = if char_len == 0 { "" } else { &after[char_len..] };
             format!("{}{}{}", before, cursor_char, after_cursor)
         } else {
             self.content.clone()

@@ -356,4 +356,78 @@ mod tests {
         let result = registry.emit(HookEvent::AgentStart, &context).await;
         assert!(result.is_ok());
     }
+
+    #[tokio::test]
+    async fn test_hook_default() {
+        let registry = HookRegistry::default();
+        assert_eq!(registry.count(), 0);
+    }
+
+    #[test]
+    fn test_logging_hook_name() {
+        let hook = LoggingHook;
+        assert_eq!(hook.name(), "logging");
+    }
+
+    #[tokio::test]
+    async fn test_logging_hook_all_events() {
+        let mut registry = HookRegistry::new();
+        registry.register(Arc::new(LoggingHook));
+
+        let context = HookContext {
+            cwd: "/tmp".to_string(),
+            session_id: "test".to_string(),
+        };
+
+        // Test all hook event variants
+        registry.emit(HookEvent::SessionStart { session_id: "s1".to_string() }, &context).await.unwrap();
+        registry.emit(HookEvent::MessageStart { message_id: "m1".to_string(), role: "user".to_string() }, &context).await.unwrap();
+        registry.emit(HookEvent::MessageEnd { message_id: "m1".to_string() }, &context).await.unwrap();
+        registry.emit(HookEvent::ToolCall {
+            tool_call_id: "tc1".to_string(),
+            tool_name: "bash".to_string(),
+            input: serde_json::json!({}),
+        }, &context).await.unwrap();
+        registry.emit(HookEvent::ToolResult {
+            tool_call_id: "tc1".to_string(),
+            tool_name: "bash".to_string(),
+            result: crate::tools::ToolResult {
+                success: true,
+                output: "ok".to_string(),
+                error: None,
+            },
+        }, &context).await.unwrap();
+        registry.emit(HookEvent::AgentStart, &context).await.unwrap();
+        registry.emit(HookEvent::AgentEnd, &context).await.unwrap();
+    }
+
+    // Test a hook that returns an error to verify error handling
+    struct FailingHook;
+
+    #[async_trait]
+    impl Hook for FailingHook {
+        fn name(&self) -> &str {
+            "failing"
+        }
+
+        async fn handle(&self, _event: HookEvent, _context: &HookContext) -> Result<()> {
+            anyhow::bail!("Hook failed on purpose")
+        }
+    }
+
+    #[tokio::test]
+    async fn test_failing_hook_doesnt_break_others() {
+        let mut registry = HookRegistry::new();
+        registry.register(Arc::new(FailingHook));
+        registry.register(Arc::new(LoggingHook));
+
+        let context = HookContext {
+            cwd: "/tmp".to_string(),
+            session_id: "test".to_string(),
+        };
+
+        // Should not panic - failing hooks are handled gracefully
+        let result = registry.emit(HookEvent::AgentStart, &context).await;
+        assert!(result.is_ok());
+    }
 }

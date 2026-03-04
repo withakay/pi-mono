@@ -5,7 +5,10 @@ use ratatui::{
 };
 
 use crate::ui::{
-    editor::Editor, footer::Footer, keybindings::AppKeybindings, messages::MessagesView,
+    editor::Editor,
+    footer::Footer,
+    keybindings::AppKeybindings,
+    messages::MessagesView,
     theme::Theme,
 };
 
@@ -36,10 +39,7 @@ impl App {
 
     /// Handle a crossterm event. Returns Some(message) when user submits.
     pub fn handle_event(&mut self, event: Event) -> Option<String> {
-        if let Event::Key(KeyEvent {
-            code, modifiers, ..
-        }) = event
-        {
+        if let Event::Key(KeyEvent { code, modifiers, .. }) = event {
             if self.keybindings.quit.matches(code, modifiers) {
                 self.should_quit = true;
                 return None;

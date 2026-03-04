@@ -1,10 +1,10 @@
 // Settings management
 // Based on TypeScript implementation but using TOML instead of JSON
 
-use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::{Path, PathBuf};
+use std::fs;
+use anyhow::{Context, Result};
 
 /// Compaction settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,16 +79,21 @@ impl Default for TerminalSettings {
 }
 
 /// Thinking level
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ThinkingLevel {
     Off,
     Minimal,
     Low,
-    #[default]
     Medium,
     High,
     XHigh,
+}
+
+impl Default for ThinkingLevel {
+    fn default() -> Self {
+        Self::Medium
+    }
 }
 
 /// Main settings structure
@@ -200,7 +205,8 @@ impl Settings {
                 .with_context(|| format!("Failed to create directory {:?}", parent))?;
         }
 
-        let contents = toml::to_string_pretty(self).context("Failed to serialize settings")?;
+        let contents = toml::to_string_pretty(self)
+            .context("Failed to serialize settings")?;
 
         fs::write(path, contents)
             .with_context(|| format!("Failed to write settings to {:?}", path))?;
@@ -469,9 +475,7 @@ mod tests {
             theme: "light".to_string(),
             ..Default::default()
         };
-        global_settings
-            .save(config_dir.join("settings.toml"))
-            .unwrap();
+        global_settings.save(config_dir.join("settings.toml")).unwrap();
 
         let manager = SettingsManager::new(&project_dir, &config_dir).unwrap();
         assert_eq!(manager.settings().theme, "light");
@@ -491,9 +495,7 @@ mod tests {
             quiet_startup: false,
             ..Default::default()
         };
-        global_settings
-            .save(config_dir.join("settings.toml"))
-            .unwrap();
+        global_settings.save(config_dir.join("settings.toml")).unwrap();
 
         // Write project settings that override
         let project_settings = Settings {
@@ -501,9 +503,7 @@ mod tests {
             quiet_startup: true,
             ..Default::default()
         };
-        project_settings
-            .save(project_dir.join(".pi/settings.toml"))
-            .unwrap();
+        project_settings.save(project_dir.join(".pi/settings.toml")).unwrap();
 
         let manager = SettingsManager::new(&project_dir, &config_dir).unwrap();
         assert_eq!(manager.settings().theme, "monokai");
