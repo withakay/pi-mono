@@ -28,6 +28,7 @@ impl EditTool {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_cwd(cwd: PathBuf) -> Self {
         Self { cwd }
     }
@@ -136,10 +137,8 @@ impl EditTool {
                         ChangeTag::Equal => " ",
                     };
 
-                    if change.tag() != ChangeTag::Equal {
-                        if first_changed_line.is_none() {
-                            first_changed_line = Some(change.old_index().unwrap_or(0) + 1);
-                        }
+                    if change.tag() != ChangeTag::Equal && first_changed_line.is_none() {
+                        first_changed_line = Some(change.old_index().unwrap_or(0) + 1);
                     }
 
                     output.push_str(&format!("{}{}", sign, change.value()));

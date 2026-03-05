@@ -322,7 +322,7 @@ impl AgentSession {
         };
 
         let model = Some(llm_client.default_model().to_string());
-        let mut final_text = String::new();
+        let mut final_text;
 
         loop {
             let messages = self.build_llm_messages();

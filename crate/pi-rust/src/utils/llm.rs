@@ -102,6 +102,7 @@ struct SseEvent {
 
 #[derive(Debug, Deserialize)]
 struct ContentBlockStart {
+    #[allow(dead_code)]
     index: usize,
     content_block: ContentBlockInfo,
 }
@@ -647,11 +648,7 @@ impl OpenAICompatClient {
 
                 leftover.push_str(&String::from_utf8_lossy(&bytes));
 
-                loop {
-                    let newline_pos = match leftover.find('\n') {
-                        Some(p) => p,
-                        None => break,
-                    };
+                while let Some(newline_pos) = leftover.find('\n') {
                     let line = leftover[..newline_pos].trim_end_matches('\r').to_string();
                     leftover = leftover[newline_pos + 1..].to_string();
 

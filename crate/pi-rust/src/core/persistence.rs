@@ -1,7 +1,7 @@
 // Session persistence - JSONL format for TypeScript compatibility
 use super::messages::SessionEntry;
 use anyhow::{Context, Result};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
